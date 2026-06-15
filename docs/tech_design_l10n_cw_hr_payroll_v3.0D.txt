@@ -1,0 +1,2327 @@
+Module: l10n_cw_hr_payroll
+
+Platform: Odoo 19 Enterprise — Odoo.sh
+
+Prepared by: [COMPANY]
+
+Version: 3.0D (Draft)
+
+Date: June 15 2026
+
+Supersedes:
+
+Confidentiality: Internal / Partner use only
+
+This document is the property of [COMPANY]. It may not be reproduced,
+distributed, or disclosed to third parties without prior written
+consent.
+
+Document History
+
+  -------------------------------------------------------------------------
+  Version   Date       Author        Description
+  --------- ---------- ------------- --------------------------------------
+  1.0D      April 2026 [COMPANY]     Initial design document. Three-tier
+                                     wage component architecture,
+                                     hr.tax.bracket model, basic salary
+                                     rules, payroll run lifecycle, and
+                                     accounting integration established.
+
+  2.0D      April 2026 [COMPANY]     Revised following analysis of official
+                                     Curaçao payroll pseudocode and SVB
+                                     Curaçao 2026 official rate
+                                     publication. See Revision Notes
+                                     section for full list of 18
+                                     corrections and additions.
+
+  2.0D      June 2026  [COMPANY]     Updated loonbelasting brackets to
+                                     official 2026 Belastingdienst Curaçao
+                                     schijventarief (6 brackets). Corrected
+                                     basisaftrek terminology to
+                                     basiskorting. Added bijzondere
+                                     beloningen table variants (excl/incl
+                                     basiskorting). Added lookup table vs
+                                     bracket calculation note. All version
+                                     references updated.
+
+  3.0D      June 2026  [COMPANY]     Major expansion covering overtime
+                                     types, enable/disable mechanism, YTD
+                                     model, open design decisions (payslip
+                                     access, user rights, loan deductions,
+                                     ZV sick pay, verzamelloonstaat),
+                                     reports inventory (Appendix A), three
+                                     diagrams, and multiple corrections to
+                                     salary rule code and terminology. See
+                                     Summary of Changes v2.0D to v3.0D.
+  -------------------------------------------------------------------------
+
+  : : Exclusion of Odoo SaaS
+
+Summary of Changes — v1.0D to v2.0D
+
+  ------------------------------------------------------------------------
+  #      Area                   Change
+  ------ ---------------------- ------------------------------------------
+  1      AOV/AWW rates          Corrected to 6.5% employee / 9.5% employer
+                                (combined AOV + AWW). AOV and AWW remain
+                                one combined rule.
+
+  2      AOV above-ceiling      New rule AOV_AWW_1PCT — employee pays
+         surcharge              additional 1% on income exceeding XCG
+                                100,000/year.
+
+  3      AVBZ sliding scale     Employee rate is 0.5% if annual AOV income
+                                < XCG 29,897.44; otherwise 1.5%. Not a
+                                flat rate.
+
+  4      BVZ employee sliding   Employee rate is 0% below XCG 12,000/year,
+         scale                  graduating to 4.3% above XCG 18,000/year.
+
+  5      BVZ and ZV split       ZV (1.9% employer-only) is a separate
+                                insurance from BVZ. Modeled as separate
+                                rules.
+
+  6      ZV / OV wage ceiling   ZV and OV share a separate wage ceiling of
+                                XCG 7,146.10/month (XCG 85,753.20/year).
+
+  7      OV — industry rate     OV is employer-only, variable 0.5%–5% by
+                                gevarenklasse. Configured per contract.
+
+  8      Cessantia              Corrected from percentage to fixed
+                                statutory amount of XCG 40.00 per employee
+                                per year.
+
+  9      Salary rule sequence   Sequence mapping now follows the canonical
+                                pseudocode step order exactly.
+
+  10     Gross definition       TotalLoon = GrossEarningsMoney +
+                                FringeBenefitsNonMoney (natura-loon
+                                added).
+
+  11     Premium income bases   BVZ base and AOV/AWW base use different
+                                deduction sets — fully specified per
+                                pseudocode.
+
+  12     Verwervingskosten      Statutory forfeit of XCG 500/year (XCG
+                                41.67/month) applied automatically to all
+                                employees.
+
+  13     Pension deduction      Conditional — only for employees with a
+                                pension arrangement. Employee share
+                                deducted from both BVZ and AOV/AWW base.
+
+  14     Beschikking (Tax       New per-employee input: monthly ruling
+         Ruling)                deduction reduces AOV/AWW base and tax
+                                base.
+
+  15     Loonbelasting method   Toeslagen are monetary deductions from the
+                                computed tax amount — not income
+                                reductions.
+
+  16     ExtraTax               New rule for bijzondere beloningen —
+                                separate rate table, marginal rate based
+                                on annual TotalLoon.
+
+  17     NonTaxedAmounts        New rule for onbelaste vergoedingen —
+                                added to net, employer cost, separate G/L
+                                account.
+
+  18     Accounting bridge      Journal entry extended with new rules (ZV,
+                                OV, NonTaxed, ExtraTax, Cessantia
+                                correction).
+  ------------------------------------------------------------------------
+
+  : Figure : Module Dependency Architecture
+
+Summary of Changes — v2.0D to v3.0D
+
+  ------------------------------------------------------------------------
+  #     Area                    Change
+  ----- ----------------------- ------------------------------------------
+  1     Loonbelasting brackets  Corrected from 4 to 6 brackets using
+                                official 2026 Belastingdienst Curaçao
+                                schijventarief
+
+  2     Terminology             Replaced basisaftrek with the official
+                                term basiskorting throughout
+
+  3     Tax calculation note    Added explanation of bracket calculation
+                                vs. published monthly lookup table
+
+  4     Bijzondere beloningen   Added explanation of exclusief and
+                                inclusief basiskorting variants and
+                                confirmed which is used
+
+  5     Overtime                Added four overtime types (weekday /
+                                Saturday / Sunday / public holiday) each
+                                with separate salary rule / rate / and
+                                hours input
+
+  6     Salary rule sequencing  Corrected BVZ_PREM_INC and AOV_PREM_INC
+                                code to use category totals instead of
+                                single rule reference
+
+  7     Enable/disable          Added per-employee enabled flag for all
+        mechanism               premiums and taxes with enabled flag
+                                helper pattern
+
+  8     Shared intermediates    Added table of rules not subject to the
+                                enable/disable mechanism with note that
+                                AOV_PREM_INC always executes even when
+                                AOV/AWW is disabled
+
+  9     Cessantia               Clarified that Cessantia is explicitly out
+                                of scope for the payroll module
+
+  10    YTD accumulation        Added hr.wage.component.ytd model for
+                                year-to-date accumulation per wage
+                                component per employee
+
+  11    Employee payslip access Added open design decision on employee
+                                payslip access mechanisms
+
+  12    User rights             Added open design decision on user rights
+                                and access control per role
+
+  13    Verzamelloonstaat       Added section on annual CSV filing for
+                                Belastingdienst Curaçao portal including
+                                both pre-2025 and 2025+ specifications
+
+  14    Loan deductions and     Added open design decision covering loan
+        garnishments            deductions and mandatory wage garnishments
+                                including bestaansminimum floor
+
+  15    ZV sick pay             Added open design decision on ZV sick pay
+                                processing including 3-day waiting period
+                                and 80% ziekengeld rule
+
+  16    SVB gevarenklasse       Added planned improvement to replace plain
+        dropdown                OV percentage field with Many2one to SVB
+                                industry classification model
+
+  17    Overtime rate           Added open design decision on overtime
+        configuration           rates per type
+
+  18    Reports inventory       Added Appendix A with full reports
+                                inventory — A-series (standard Odoo) and
+                                B-series (custom)
+
+  19    Diagrams                Added three diagrams; named as Figure 1 /
+                                Figure 2 / and Figure 3
+
+  20    Module versioning       Documented pre-release and production
+                                release versioning convention
+  ------------------------------------------------------------------------
+
+  : Listing : Direct Dependencies
+
+Contents
+
+Document History 2
+
+Summary of Changes — v1.0D to v2.0D 2
+
+Contents 4
+
+1 Executive Summary 1
+
+2 Platform Decision and Rationale 2
+
+3 Module Dependency Architecture 1
+
+3.1 Direct dependencies declared in __manifest__.py 1
+
+3.2 Transitive dependencies resolved by Odoo 1
+
+3.3 Dependency resolution at installation time 1
+
+4 Core Odoo Payroll Engine 2
+
+4.1 hr.payroll.structure.type 2
+
+4.2 hr.payroll.structure 2
+
+4.3 hr.salary.rule 2
+
+4.4 hr.payslip and hr.payslip.run 2
+
+4.5 Working Hours Normalization 2
+
+5 Three-Tier Wage Component Model 1
+
+5.1 Tier 1 — Global Wage Component Library 1
+
+5.2 Tier 2 — Component Template Sets 1
+
+5.3 Tier 3 — Employee Wage Lines 1
+
+6 Custom Data Models 2
+
+6.1 hr.salary.rule — Extension 2
+
+6.2 hr.wage.component.set 2
+
+6.3 hr.wage.component.set.line 2
+
+6.4 hr.employee.wage.line 2
+
+6.5 hr.wage.component.ytd 3
+
+6.6 hr.tax.bracket 4
+
+7 Payroll Inputs — Per-Employee Parameters 5
+
+7.1 Disabling premiums and taxes per employee 5
+
+8 Salary Rules — Canonical Sequence and Computation 6
+
+8.1 Component enable/disable mechanism 6
+
+8.2 Complete Sequence Map 1
+
+8.2.1 Rules Not Subject to the Enable/Disable Mechanism 2
+
+8.3 Step 1 — TOTAL_LOON (Seq 10) 3
+
+8.4 Step 2 — BVZ_PREM_INC (Seq 20, hidden) 4
+
+8.5 Step 3 — BVZ_ER (Seq 30, hidden) 4
+
+8.6 Step 4 — BVZ_EMP (Seq 40) 4
+
+8.7 Step 5 — AOV_PREM_INC (Seq 50, hidden) 5
+
+8.8 Step 6 — AOV/AWW (Seq 60, 61, 62) 5
+
+8.9 Step 7 — AVBZ (Seq 70, 71) 5
+
+8.10 Step 8 — TAX_INC (Seq 80, hidden) 6
+
+8.11 Step 9 — LOONBEL_RAW (Seq 90, hidden) 6
+
+8.12 Step 10 — LOONBEL (Seq 100) 6
+
+8.13 Step 11 — EXTRA_TAX (Seq 110) 7
+
+8.14 Step 12 — ZV_ER and OV_ER (Seq 120, 121, hidden) 7
+
+8.15 Step 13 — NET and NONTAXED (Seq 130, 140) 7
+
+8.16 Step 14 — TOTAL_ER_COST (Seq 150, hidden) 7
+
+8.17 Cessantia (Seq 160, hidden) 7
+
+9 Tax Bracket Model and Rate Management 9
+
+9.1 2026 Official Rates — Belastingdienst Curaçao 9
+
+9.2 2026 Official Rates — SVB Curaçao 10
+
+9.3 Rate Update Procedure 10
+
+10 Payroll Run Lifecycle 11
+
+11 Accounting Integration 12
+
+11.1 GL Account Mapping 12
+
+11.2 Balance Verification 12
+
+12 Security and Access Control 13
+
+12.1 User Groups 13
+
+12.2 Record Rules 13
+
+12.3 Data Protection Compliance 13
+
+13 Module File Structure 14
+
+13.1 Key __manifest__.py Fields 15
+
+14 Open Design Decisions 16
+
+14.1 Employee Access to Payslips 16
+
+14.2 User Rights and Access Control 16
+
+14.3 Verzamelloonstaat — Upload Format 18
+
+14.4 Loan Deductions 18
+
+14.5 Overtime Rate Configuration 18
+
+14.6 Ziekteverzekering (ZV) — Sick Pay Processing 19
+
+15 Deferred Items and Future Odoo App Versions 20
+
+16 Tables of Figures, Listings and Tables 24
+
+APPENDIX A—Reports i
+
+A-Series — Standard Odoo 19 Reports i
+
+B-Series — Custom Reports ii
+
+Executive Summary
+
+This document provides a comprehensive technical description of
+l10n_cw_hr_payroll, a custom Odoo 19 Enterprise payroll localization
+module for Curaçao. The module implements the full statutory payroll
+framework governed by the Belastingdienst Curaçao (wage tax,
+loonbelasting) and the Sociale Verzekeringsbank (SVB) (AOV/AWW, AVBZ,
+BVZ, ZV, OV premiums), built on top of Odoo’s native hr_payroll engine.
+
+The design follows Odoo’s official localization pattern (analogous to
+l10n_be_hr_payroll, l10n_in_hr_payroll), making this the first formally
+structured payroll localization for Curaçao on the Odoo platform.
+
+Key architectural decisions:
+
+-   All calculation logic executes inside Odoo — no external payroll
+    service dependency
+-   Statutory rates are stored as data records (not hardcoded), enabling
+    rate updates without code deployment
+-   A three-tier wage component model separates global rule definitions,
+    company-level template sets, and per-employee assignments
+-   The canonical calculation sequence follows the official Curaçao
+    payroll pseudocode step-by-step — each pseudocode step maps directly
+    to one or more Odoo salary rules in strict sequence order
+-   The module extends standard Odoo models minimally, adding only what
+    cannot be achieved through configuration
+-   Release Version 1.0 will cover monthly payroll only. Support for
+    additional pay periods (bi-weekly, semi-monthly, weekly) is planned
+    for a future version and follows the same architecture with
+    period-specific divisors and tax tables.
+
+Platform Decision and Rationale
+
+The module requires Odoo.sh (or self-hosted Odoo Enterprise). Odoo SaaS
+is explicitly ruled out for the following technical reasons:
+
+  ------------------------------------------------------------------------
+  Constraint                   Odoo SaaS             Odoo.sh / Self-hosted
+  ---------------------------- --------------------- ---------------------
+  Custom module installation   Not permitted         Supported
+
+  Python code in salary rules  Not accessible        Full access
+
+  Custom ORM models            Studio only (x_       Full model definition
+                               prefix)               
+
+  hr_payroll module            Not available         Available
+                                                     (Enterprise)
+
+  hr_payroll_account module    Not available         Available
+                                                     (Enterprise)
+
+  Direct XML data files        Not accessible        Full access
+  ------------------------------------------------------------------------
+
+  : Listing : Python Computation Context
+
+Odoo.sh specifically provides the CI/CD pipeline, branch-based testing,
+automated upgrades, and managed infrastructure that production payroll
+deployments require.
+
+The Odoo Enterprise license is mandatory because hr_payroll and
+hr_payroll_account are Enterprise-only modules not available in Odoo
+Community Edition.
+
+Module Dependency Architecture
+
+The dependency graph below maps every standard Odoo module that
+l10n_cw_hr_payroll directly or transitively depends on, and how our
+custom models sit on top of the standard layer.
+
+[]
+
+Direct dependencies declared in __manifest__.py
+
+    'depends': [
+        'hr',
+        'hr_contract',
+        'hr_holidays',
+        'hr_payroll',
+        'hr_payroll_account',
+        'hr_attendance',
+    ],
+
+Transitive dependencies resolved by Odoo
+
+The resource module is pulled in automatically as a dependency of hr. It
+is critical because resource.calendar drives working hour normalization
+(173.33 hrs/month for 40h/week schedules) and resource.calendar.leaves
+feeds absence-driven payroll adjustments.
+
+The mail module is always present and provides mail.thread and
+mail.activity.mixin, both inherited by hr.payslip, hr.contract, and our
+custom models to enable chatter logging, activity scheduling, and audit
+trails.
+
+The account module is pulled in as a dependency of hr_payroll_account
+and provides account.account, account.journal, and account.move.
+
+Dependency resolution at installation time
+
+Install order: base → mail → resource → hr → hr_contract → hr_holidays →
+hr_attendance → account → hr_payroll → hr_payroll_account →
+l10n_cw_hr_payroll.
+
+Core Odoo Payroll Engine
+
+hr.payroll.structure.type
+
+The top-level classifier. Our module ships one structure type: CWMONTHLY
+(Curaçao — Monthly Payroll).
+
+hr.payroll.structure
+
+A named collection of salary rules. Our module ships one structure:
+CWSTAFF (Curaçao — Standard Staff Payroll).
+
+hr.salary.rule
+
+The atomic computation unit. Each rule defines a unique code, a sequence
+(evaluation order), a category_id, an amount_select mode (fix,
+percentage, or code), an amount_python_compute block, and an
+appears_on_payslip boolean.
+
+The Python computation context available inside amount_python_compute:
+
+    employee    # hr.employee record
+    contract    # hr.contract record
+    payslip     # hr.payslip record
+    worked_days # object; access by code: worked_days.WORK100.number_of_hours
+    inputs      # object; access by code: inputs.PENSION_EMP.amount
+    categories  # object; accumulated category totals: categories.BASIC, categories.ALW
+    rules       # object; access prior rule results: rules.BVZ_PREM_INC.amount
+    env         # Odoo environment; allows ORM queries: env['hr.tax.bracket'].search(...)
+    result      # must be assigned — the computed amount for this rule
+
+hr.payslip and hr.payslip.run
+
+One payslip record per employee per payroll run. Status transitions:
+draft → verify → done. The run groups all payslips of a period; closing
+the run triggers journal entry generation via hr_payroll_account.
+
+Working Hours Normalization
+
+    hours_per_month = (hours_per_day × days_per_week × 52) / 12
+                    = (8 × 5 × 52) / 12
+                    = 173.333... hours/month
+
+Used as the divisor for hourly rate derivation:
+hourly_rate = contract.wage / 173.33.
+
+Three-Tier Wage Component Model
+
+[]
+
+Tier 1 — Global Wage Component Library
+
+Model: hr.salary.rule (extended with singleton field)
+
+Every wage component is defined at Tier 1. The singleton field (Boolean,
+default True) controls whether a component may be applied more than once
+to the same employee.
+
+Tier 2 — Component Template Sets
+
+Model: hr.wage.component.set and hr.wage.component.set.line (new)
+
+A named, company-scoped grouping of Tier 1 rules functioning as a
+one-time applicator template. The hr.wage.set.apply.wizard applies the
+set to one or more employees, creates independent Tier 3 records, and
+fully decouples the set. Subsequent changes to the set have no effect on
+employees who already had it applied.
+
+Tier 3 — Employee Wage Lines
+
+Model: hr.employee.wage.line (new)
+
+One record per wage component per employee, fully independent after
+creation. Contains a read-only reference to the Tier 1 rule, a
+parameter_value field for employee-specific overrides, and an optional
+payslip_description for per-employee payslip label customization.
+
+Label resolution:
+payslip_label = payslip_description or salary_rule_id.name
+
+Custom Data Models
+
+hr.salary.rule — Extension
+
+    class HrSalaryRule(models.Model):
+        _inherit = 'hr.salary.rule'
+
+        singleton = fields.Boolean(
+            string='Singleton',
+            default=True,
+            help='If True, this rule may only be applied once per employee.'
+        )
+
+hr.wage.component.set
+
+  ---------------------------------------------------------------------------------------
+  Field                   Type                                    Description
+  ----------------------- --------------------------------------- -----------------------
+  component_id            Char                                    Unique technical
+                                                                  identifier for this
+                                                                  component set. Short
+                                                                  uppercase code, e.g.
+                                                                  STD_OFFICE. Required,
+                                                                  unique, immutable after
+                                                                  creation, and indexed.
+                                                                  Used as a stable
+                                                                  reference key in
+                                                                  reports and
+                                                                  integrations
+                                                                  independent of the set
+                                                                  name.
+
+  name                    Char                                    Set name
+
+  description             Text                                    Optional description
+
+  company_id              Many2one → res.company                  Company scope
+
+  set_line_ids            One2many → hr.wage.component.set.line   Component lines
+  ---------------------------------------------------------------------------------------
+
+  : Listing : Working Hours Normalization
+
+hr.wage.component.set.line
+
+  ----------------------------------------------------------------------------------
+  Field                   Type                               Description
+  ----------------------- ---------------------------------- -----------------------
+  set_id                  Many2one → hr.wage.component.set   Parent set
+
+  salary_rule_id          Many2one → hr.salary.rule          Reference to global
+                                                             rule
+
+  sequence                Integer                            Order within set
+
+  parameter_override      Float                              Optional default
+                                                             parameter value
+  ----------------------------------------------------------------------------------
+
+  : Figure : Three-Tier Wage Component
+
+hr.employee.wage.line
+
+  ---------------------------------------------------------------------------
+  Field                   Type                        Description
+  ----------------------- --------------------------- -----------------------
+  employee_id             Many2one → hr.employee      The employee
+
+  salary_rule_id          Many2one → hr.salary.rule   Global rule reference
+                                                      (readonly after
+                                                      creation)
+
+  sequence                Integer                     Evaluation sequence
+
+  active                  Boolean                     Deactivate without
+                                                      deleting
+
+  parameter_value         Float                       Employee-specific
+                                                      parameter
+
+  salary_rule_name        Char (related, readonly)    Mirror of
+                                                      salary_rule_id.name
+
+  payslip_description     Char                        Payslip label override
+                                                      — editable by payroll
+                                                      admin
+
+  active                  Boolean                     Already exists — no
+                                                      change needed
+
+  enabled                 Boolean                     Controls whether this
+                                                      wage component is
+                                                      applied in the payroll
+                                                      calculation. Default:
+                                                      True. When set to
+                                                      False, the salary rule
+                                                      returns 0.00 without
+                                                      error, leaving the
+                                                      calculation chain
+                                                      intact. Replaces the
+                                                      need to remove the
+                                                      component entirely.
+  ---------------------------------------------------------------------------
+
+  : Listing : Extension to hr.salary Model
+
+hr.wage.component.ytd
+
+Stores the year-to-date accumulated amount for each wage component per
+employee per calendar year. Records are created and updated
+automatically when a payslip run is closed. Prior year records are
+retained indefinitely for historical reporting and audit purposes.
+
+  ------------------------------------------------------------------------
+  Field                Type                    Description
+  -------------------- ----------------------- ---------------------------
+  employee_id          Many2one → hr.employee  The employee
+
+  salary_rule_id       Many2one →              The wage component rule
+                       hr.salary.rule          
+
+  wage_line_id         Many2one →              Reference to the Tier 3
+                       hr.employee.wage.line   wage line
+
+  year                 Integer                 Calendar year, e.g. 2026
+
+  company_id           Many2one → res.company  Company scope
+
+  ytd_amount           Float                   Accumulated amount for the
+                                               year to date
+
+  last_updated         Date                    Date of last update
+                                               (payslip run close date)
+
+  last_payslip_id      Many2one → hr.payslip   Reference to the last
+                                               payslip that updated this
+                                               record
+  ------------------------------------------------------------------------
+
+  : : HR Wage Component Set
+
+The YTD record is updated in the action_close() method of
+hr.payslip.run. For each confirmed payslip in the run, the system
+iterates over all hr.payslip.line records, locates or creates the
+corresponding hr.wage.component.ytd record, and increments ytd_amount by
+the payslip line amount. The last_updated and last_payslip_id fields are
+updated accordingly.
+
+hr.tax.bracket
+
+  -----------------------------------------------------------------------
+  Field                   Type                    Description
+  ----------------------- ----------------------- -----------------------
+  name                    Char                    Description
+
+  sequence                Integer                 Application order
+
+  income_from             Float                   Band lower bound
+
+  income_to               Float                   Band upper bound (0 =
+                                                  no ceiling)
+
+  rate                    Float                   Rate as percentage
+
+  valid_from              Date                    Effective date
+                                                  (mandatory)
+
+  valid_to                Date                    Expiry date (empty =
+                                                  still active)
+
+  tax_type                Selection               loonbelasting / aov_aww
+                                                  / avbz / bvz /
+                                                  bijzondere_beloning /
+                                                  zv_ov
+
+  active                  Boolean                 Active flag
+  -----------------------------------------------------------------------
+
+  : : HR Wage Component Set Line
+
+The tax_type selection is expanded in v2.0D to include
+bijzondere_beloning (for the ExtraTax rate table) and zv_ov (for the
+ZV/OV wage ceiling).
+
+Listing 5: Core Method
+
+    @api.model
+    def compute_tax(self, income, tax_type='loonbelasting', date=None):
+        """
+        For loonbelasting: returns raw tax amount from bracket table.
+        Toeslagen are applied AFTER this call as monetary deductions
+        from the returned amount — not as income reductions.
+        For all other tax_types: returns the premium amount directly.
+        """
+        from datetime import date as dt
+        if date is None:
+            date = dt.today()
+
+        brackets = self.search([
+            ('tax_type',   '=',  tax_type),
+            ('active',     '=',  True),
+            ('valid_from', '<=', date),
+            '|',
+                ('valid_to', '=',  False),
+                ('valid_to', '>=', date),
+        ], order='sequence asc')
+
+        tax       = 0.0
+        remaining = income
+
+        for bracket in brackets:
+            if remaining <= 0:
+                break
+            lower   = bracket.income_from
+            upper   = bracket.income_to if bracket.income_to > 0 else float('inf')
+            in_band = min(remaining, upper - lower)
+            if in_band <= 0:
+                continue
+            tax       += in_band * (bracket.rate / 100.0)
+            remaining -= in_band
+
+        return round(tax, 2)
+
+Critical maintenance rule: Bracket records must never be deleted. When
+rates change, set valid_to on expiring records and insert new ones with
+the updated valid_from.
+
+Payroll Inputs — Per-Employee Parameters
+
+The following values are entered per payslip as hr.payslip.input
+records. They represent employee-specific parameters that vary per
+person and per period.
+
+  --------------------------------------------------------------------------
+  Input Code              Description                Conditional
+  ----------------------- -------------------------- -----------------------
+  FRINGE_BENEFITS         Natura-loon / loon in      Only when applicable
+                          natura                     
+                          (FringeBenefitsNonMoney)   
+
+  PENSION_EMP             Werknemersdeel             Only for employees with
+                          pensioenpremie             a pension arrangement
+                          (PensionEmployeePart)      
+
+  BESCHIKKING             Maandelijkse               Only for employees with
+                          beschikkingsaftrek         a ruling from
+                          (TaxRulingDeduction)       Belastingdienst CW
+
+  NONTAXED_AMT            Onbelaste vergoedingen     Only when applicable
+                          (NonTaxedAmounts)          
+
+  EXTRA_EARN              Bijzondere beloning        Only when > 0
+                          (ExtraTaxEarnings)         
+
+  OVT_WD_HRS              Weekday overtime hours     Only when applicable
+
+  OVT_SAT_HRS             Saturday overtime hours    Only when applicable
+
+  OVT_SUN_HRS             Sunday overtime hours      Only when applicable
+
+  OVT_PH_HRS              Public holiday overtime    Only when applicable
+                          hours                      
+  --------------------------------------------------------------------------
+
+  : : HR Wage Component Year-to-Date
+
+The VERWERVINGSKOSTEN (acquisition costs forfeit) is not a payslip input
+— it is a statutory constant of XCG 500/year (XCG 41.67/month) applied
+automatically to all employees via the salary rule logic.
+
+The OV industry rate is stored as a field on hr.contract and is fixed
+per employee for the duration of their contract. In the current design
+this is implemented as a plain percentage field (l10n_cw_ov_percentage).
+In the detailed design phase this will be replaced by a Many2one
+reference to a dedicated model l10n_cw.svb.industry, which will store
+the complete official SVB gevarenklasse list with their corresponding OV
+percentages. Selecting the industry class from a dropdown will
+automatically populate the correct OV percentage, eliminating manual
+entry errors. This model belongs to the localization layer as it
+contains statutory data published by SVB Curaçao. Implementation
+requires the complete SVB gevarenklasse list with OV percentages to be
+sourced and verified before the detailed design can be finalized.
+
+Disabling premiums and taxes per employee
+
+Any wage component on hr.employee.wage.line can be individually disabled
+by setting its enabled field to False.
+This is the correct mechanism for handling statutory exemptions without
+altering the payroll structure. The active field (already present)
+controls visibility in the UI; the enabled field controls participation
+in the calculation. Both fields are independent:
+
+  -----------------------------------------------------------------------
+  Field                    Effect when False
+  ------------------------ ----------------------------------------------
+  active                   Hides the line from the UI; excluded from
+                           calculation
+
+  enabled                  Line remains visible in the UI for audit
+                           purposes; returns 0.00 in calculation
+  -----------------------------------------------------------------------
+
+  : : HR Tax Bracket
+
+The distinction is intentional:
+Disabling a premium for audit transparency requires the line to remain
+visible (active = True, enabled = False), so the payroll administrator
+and auditor can see that the exemption is in place and deliberate.
+
+Salary Rules — Canonical Sequence and Computation
+
+The sequence numbering follows the canonical pseudocode step order
+directly. Each pseudocode step maps to one sequence block. Computational
+intermediates that are not printed on the payslip are marked with
+appears_on_payslip = False.
+
+Component enable/disable mechanism
+
+Every salary rule that maps to an hr.employee.wage.line record checks
+the enabled flag on that record before computing. If enabled = False,
+the rule immediately returns result = 0.00 without executing its
+calculation logic. This ensures the payroll calculation chain is never
+broken — downstream rules that reference this rule via rules.CODE.amount
+will receive 0.00 rather than an error or a stale value.
+
+This mechanism allows the payroll administrator to disable individual
+premiums or taxes per employee without modifying the payroll structure
+or removing wage lines. Examples of legitimate use:
+
+-   An employee with approved private health insurance is exempt from
+    BVZ — BVZ_EMP and BVZ_ER are disabled on that employee's wage lines
+-   An employee who has reached the AOV/AWW ceiling mid-year —
+    AOV_AWW_EMP and AOV_AWW_ER are disabled for the remaining months
+-   A foreign employee, exempt from certain premiums under a bilateral
+    agreement
+
+Important — shared premium income bases:
+
+The enabled flag applies exclusively to the premium or tax computation
+rules, never to premium income base rules (BVZ_PREM_INC at Seq 20,
+AOV_PREM_INC at Seq 50, TAX_INC at Seq 80, LOONBEL_RAW at Seq 90). These
+base rules always execute regardless of which downstream premiums are
+enabled or disabled, because multiple rules may share the same base.
+
+Specifically: disabling AOV_AWW_EMP and AOV_AWW_ER (e.g. for an employee
+aged 67 who is exempt from AOV/AWW contributions) does not disable
+AOV_PREM_INC. The AVBZ premium (Seq 70/71) continues to use
+rules.AOV_PREM_INC.amount as its base and calculates correctly
+
+[]
+
+Complete Sequence Map
+
+  -------------------------------------------------------------------------------------
+  Seq            Code            Pseudocode     Description              On Payslip
+                                 Step                                    
+  -------------- --------------- -------------- ------------------------ --------------
+  10             TOTAL_LOON      Step 1         GrossEarningsMoney +     Yes
+                                                FringeBenefitsNonMoney   
+
+  11             OVT_WD          Step 1         Weekday overtime         Yes
+                                                (configurable rate,      
+                                                default 150%)            
+
+  12             OVT_SAT         Step 1         Saturday overtime        Yes
+                                                (configurable rate,      
+                                                default 150%)            
+
+  13             OVT_SUN         Step 1         Sunday overtime          Yes
+                                                (configurable rate,      
+                                                default 200%)            
+
+  14             OVT_PH          Step 1         Public holiday overtime  Yes
+                                                (configurable rate,      
+                                                default 200%)            
+
+  20             BVZ_PREM_INC    Step 2         BVZ premium income       No
+                                                (after deductions)       
+
+  30             BVZ_ER          Step 3         BVZ employer 9.3%        Yes
+
+  40             BVZ_EMP         Step 4         BVZ employee (sliding    Yes
+                                                scale)                   
+
+  50             AOV_PREM_INC    Step 5         AOV/AWW/AVBZ premium     No
+                                                income (after            
+                                                deductions)              
+
+  60             AOV_AWW_EMP     Step 6         AOV/AWW employee 6.5%    Yes
+                                                (up to ceiling)          
+
+  61             AOV_AWW_ER      Step 6         AOV/AWW employer 9.5%    Yes
+                                                (up to ceiling)          
+
+  62             AOV_AWW_1PCT    Step 6         AOV employee surcharge   Yes
+                                                1% above ceiling         
+
+  70             AVBZ_EMP        Step 7         AVBZ employee (0.5% or   Yes
+                                                1.5% sliding)            
+
+  71             AVBZ_ER         Step 7         AVBZ employer 0.5%       Yes
+
+  80             TAX_INC         Step 8         Tax income base (fiscal  No
+                                                wage)                    
+
+  90             LOONBEL_RAW     Step 9         Raw tax from             No
+                                                loonbelasting table      
+
+  100            LOONBEL         Step 10        Loonbelasting after      Yes
+                                                toeslagen deduction      
+
+  110            EXTRA_TAX       Step 11        Tax on bijzondere        Yes
+                                                beloningen               
+
+  120            ZV_ER           Step 12        ZV employer 1.9% (up to  Yes
+                                                ZV/OV ceiling)           
+
+  121            OV_ER           Step 12        OV employer variable %   Yes
+                                                (up to ZV/OV ceiling)    
+
+  130            NET             Step 13        Net payment              Yes
+
+  140            NONTAXED        Step 13        Onbelaste vergoedingen   Yes
+                                                (added to net)           
+
+  150            TOTAL_ER_COST   Step 14        Total employer cost      No
+                                                (informational)          
+
+  160            CESSANTIA       —              Fixed statutory employer No
+                                                contribution             
+  -------------------------------------------------------------------------------------
+
+  : : Payroll Input Values
+
+Enabled flag pattern — applies to all disable-able rules:
+
+    wage_line = env['hr.employee.wage.line'].search([
+        ('employee_id', '=', employee.id),
+        ('salary_rule_id.code', '=', 'RULE_CODE'),
+    ], limit=1)
+    if wage_line and not wage_line.enabled:
+        result = 0.0
+    else:
+        # ... normal computation
+
+Replace RULE_CODE with the relevant salary rule code. This pattern is
+not shown in each individual listing for brevity but is understood to
+apply to all disable-able rules listed in Table 9.
+
+Rules Not Subject to the Enable/Disable Mechanism
+
+The following rules are computational intermediates shared by multiple
+downstream rules. They are always executed regardless of which premiums
+or taxes are enabled or disabled for an employee. The enabled flag must
+never be applied to these rules.
+
+  -------------------------------------------------------------------------
+  Seq            Code            Reason
+  -------------- --------------- ------------------------------------------
+  20             BVZ_PREM_INC    Base for BVZ_EMP and BVZ_ER
+
+  50             AOV_PREM_INC    Base for AOV_AWW_EMP, AOV_AWW_ER,
+                                 AOV_AWW_1PCT, AVBZ_EMP and AVBZ_ER
+
+  80             TAX_INC         Base for LOONBEL_RAW
+
+  90             LOONBEL_RAW     Base for LOONBEL
+
+  130            NET             Final output — always required
+
+  150            TOTAL_ER_COST   Informational aggregate — always required
+
+  160            CESSANTIA       Fixed statutory amount — no per-employee
+                                 variation
+  -------------------------------------------------------------------------
+
+  : : Employee Wage Line States
+
+All other rules in the sequence map — premiums, taxes, employer
+contributions — may be individually disabled per employee via the
+enabled field on hr.employee.wage.line.
+
+Step 1 — TOTAL_LOON (Seq 10)
+
+    fringe = inputs.FRINGE_BENEFITS.amount if inputs.FRINGE_BENEFITS else 0.0
+    result = contract.wage + fringe
+
+TotalLoon is the sum of monetary gross earnings and any non-monetary
+fringe benefits (natura-loon). This is the anchor for all downstream
+calculations.
+
+NOTE: Overtime rules OVT_WD (Seq 11), OVT_SAT (Seq 12), OVT_SUN (Seq
+13), and OVT_PH (Seq 14) each compute their respective overtime amount
+from their corresponding payslip input (OVT_WD_HRS, OVT_SAT_HRS,
+OVT_SUN_HRS, OVT_PH_HRS) and the configured rate stored on
+hr.employee.wage.line as parameter_value. They contribute to the ALW
+category alongside other allowances.
+
+Step 2 — BVZ_PREM_INC (Seq 20, hidden)
+
+    VERWERVINGSKOSTEN_MONTHLY = 41.67
+
+    pension_emp = inputs.PENSION_EMP.amount if inputs.PENSION_EMP else 0.0
+
+    # Total loon = base wage + fringe + all overtime components 
+    # categories.BASIC captures TOTAL_LOON (Seq 10) 
+    # categories.ALW captures OVT_WD, OVT_SAT, OVT_SUN, OVT_PH (Seq 11-14)
+    total_loon  = rules.TOTAL_LOON.amount
+
+    bvz_prem_inc = total_loon - VERWERVINGSKOSTEN_MONTHLY - pension_emp
+
+    # Annualise and apply BVZ ceiling
+    annual = bvz_prem_inc * 12
+    if annual > 150000:
+        annual = 150000
+    result = annual / 12
+
+NOTE: The VERWERVINGSKOSTEN disable option (Option A vs Option B) is
+pending confirmation. Once confirmed, this code will be updated
+accordingly. See Open Design Decisions section.
+
+Step 3 — BVZ_ER (Seq 30, hidden)
+
+    result = rules.BVZ_PREM_INC.amount * 0.093
+
+BVZ employer contribution: 9.3% of capped BVZ premium income.
+
+Step 4 — BVZ_EMP (Seq 40)
+
+    bvz_prem_inc = rules.BVZ_PREM_INC.amount
+    annual       = bvz_prem_inc * 12
+
+    if annual < 12000:
+        pct = 0.0
+    elif annual <= 13199.99:
+        pct = 0.043 - 0.038    # 0.5%
+    elif annual <= 14399.99:
+        pct = 0.043 - 0.028    # 1.5%
+    elif annual <= 15599.99:
+        pct = 0.043 - 0.019    # 2.4%
+    elif annual <= 16799.99:
+        pct = 0.043 - 0.011    # 3.2%
+    elif annual <= 18000:
+        pct = 0.043 - 0.006    # 3.7%
+    else:
+        pct = 0.043            # 4.3%
+
+    result = -(bvz_prem_inc * pct)
+
+Negative result (deduction from employee). The sliding scale protects
+low-income employees from the full BVZ contribution.
+
+Step 5 — AOV_PREM_INC (Seq 50, hidden)
+
+    VERWERVINGSKOSTEN_MONTHLY = 41.67
+
+    pension_emp  = inputs.PENSION_EMP.amount if inputs.PENSION_EMP else 0.0
+    beschikking  = inputs.BESCHIKKING.amount if inputs.BESCHIKKING else 0.0
+
+    total_loon   = categories.BASIC + categories.ALW
+    aov_prem_inc = total_loon - VERWERVINGSKOSTEN_MONTHLY - pension_emp – beschikking
+
+    result       = aov_prem_inc   # AOVAWWABVZPremiumIncome (periodic)
+
+Note: The original pseudocode erroneously referenced PensionEmployerPart
+here. Confirmed correction: the deduction is PensionEmployeePart
+(werknemersdeel), consistent with Step 2.
+
+Step 6 — AOV/AWW (Seq 60, 61, 62)
+
+    # Seq 60 — AOV_AWW_EMP
+    wage_line = env['hr.employee.wage.line'].search([ 
+        ('employee_id', '=', employee.id), 
+        ('salary_rule_id.code', '=', 'AOV_AWW_EMP'), 
+    ], limit=1) 
+    if wage_line and not wage_line.enabled: 
+        result = 0.0 
+    else:
+        aov_prem_inc = rules.AOV_PREM_INC.amount
+        annual_aov   = aov_prem_inc * 12
+
+        if annual_aov > 100000:
+            aov_base_annual = 100000
+            excess_annual   = annual_aov - 100000
+        else:
+            aov_base_annual = annual_aov
+            excess_annual   = 0.0
+
+        aov_base_periodic = aov_base_annual / 12
+        result = -(aov_base_periodic * 0.065)   # 6.5% = AOV 6% + AWW 0.5% employee
+    # Seq 61 — AOV_AWW_ER (hidden)
+    result = rules.AOV_PREM_INC.amount * min(1.0, 100000 / (rules.AOV_PREM_INC.amount * 12)) * 0.095
+    # 9.5% = AOV 9% + AWW 0.5% employer, capped at XCG 100,000/year base
+    # Seq 62 — AOV_AWW_1PCT (above-ceiling surcharge)
+    aov_prem_inc  = rules.AOV_PREM_INC.amount
+    annual_aov    = aov_prem_inc * 12
+    excess_annual = max(0.0, annual_aov - 100000)
+    result = -((excess_annual / 12) * 0.01)   # 1% employee surcharge on excess
+
+NOTE: This enabled check pattern applies to all disable-able rules:
+BVZ_EMP (Seq 40), AOV_AWW_EMP (Seq 60), AOV_AWW_ER (Seq 61),
+AOV_AWW_1PCT (Seq 62), AVBZ_EMP (Seq 70), AVBZ_ER (Seq 71), LOONBEL (Seq
+100), EXTRA_TAX (Seq 110), ZV_ER (Seq 120), OV_ER (Seq 121). It does NOT
+apply to: BVZ_PREM_INC, AOV_PREM_INC, TAX_INC, LOONBEL_RAW, NET,
+TOTAL_ER_COST.
+
+The AOV_AWW_1PCT rule is zero for most employees who earn below the
+ceiling. For employees above it, the surcharge ensures compliance with
+the Landsverordening.
+
+Step 7 — AVBZ (Seq 70, 71)
+
+    # Seq 70 — AVBZ_EMP
+    aov_prem_inc = rules.AOV_PREM_INC.amount
+    annual_aov   = aov_prem_inc * 12
+
+    AVBZ_CEILING_ANNUAL = 606247.08
+    annual_avbz  = min(annual_aov, AVBZ_CEILING_ANNUAL)
+    avbz_periodic = annual_avbz / 12
+
+    # Sliding employee rate
+    if annual_aov < 29897.44:
+        emp_pct = 0.005   # 0.5% — lower income threshold (Landsverordening)
+    else:
+        emp_pct = 0.015   # 1.5% standard rate
+
+    result = -(avbz_periodic * emp_pct)
+    # Seq 71 — AVBZ_ER (hidden)
+    aov_prem_inc = rules.AOV_PREM_INC.amount
+    annual_aov   = aov_prem_inc * 12
+    AVBZ_CEILING_ANNUAL = 606247.08
+    annual_avbz  = min(annual_aov, AVBZ_CEILING_ANNUAL)
+    result = (annual_avbz / 12) * 0.005   # 0.5% employer
+
+The income threshold of XCG 29,897.44 is established in the
+Landsverordening. Many payroll packages omit this, causing employees to
+overpay. This module applies it correctly.
+
+Step 8 — TAX_INC (Seq 80, hidden)
+
+    aov_prem_inc = rules.AOV_PREM_INC.amount
+    aov_emp      = abs(rules.AOV_AWW_EMP.amount)   # remove negative sign
+    result       = aov_prem_inc - aov_emp
+
+This is the periodic fiscal wage used as input to the tax table lookup.
+
+Step 9 — LOONBEL_RAW (Seq 90, hidden)
+
+    tax_inc        = rules.TAX_INC.amount
+    annual_tax_inc = tax_inc * 12   # annualise
+
+    raw_annual_tax = env['hr.tax.bracket'].compute_tax(
+        income   = annual_tax_inc,
+        tax_type = 'loonbelasting',
+        date     = payslip.date_from
+    )
+
+    result = raw_annual_tax / 12   # back to periodic
+
+This rule returns the raw tax amount from the table before any toeslagen
+are applied. The toeslagen are applied as monetary deductions in Step
+10.
+
+Step 10 — LOONBEL (Seq 100)
+
+    raw_tax = rules.LOONBEL_RAW.amount   # periodic raw tax
+
+    # Toeslagen 2026 — monetary deductions from the tax amount (not from income)
+    basic_ded   = 2915.0 / 12    # Basisaftrek — all employees automatically
+    only_earner = (employee.l10n_cw_only_earner_deduction or 0.0) / 12
+    child_ded   = (employee.l10n_cw_child_deduction        or 0.0) / 12
+    old_age_ded = (employee.l10n_cw_old_age_deduction      or 0.0) / 12
+
+    total_deductions = basic_ded + only_earner + child_ded + old_age_ded
+
+    actual_tax = raw_tax - total_deductions
+    if actual_tax < 0:
+        actual_tax = 0.0
+
+    result = -actual_tax
+
+Critical design note (corrected from v1.0D): Toeslagen are applied as
+monetary deductions from the computed tax amount, not as reductions to
+taxable income before bracket calculation. The basiskorting of XCG
+2,915/year applies to all employees automatically. The remaining
+toeslagen are stored as annual amounts on custom fields of hr.employee
+and divided by 12 for monthly payroll.
+
+Step 11 — EXTRA_TAX (Seq 110)
+
+    extra_earn = inputs.EXTRA_EARN.amount if inputs.EXTRA_EARN else 0.0
+
+    if extra_earn <= 0:
+        result = 0.0
+    else:
+        # Marginal rate determined by annual TotalLoon, applied only to the bijzondere beloning
+        annual_total = rules.TOTAL_LOON.amount * 12
+
+        if annual_total <= 43500:
+            pct = 0.0975
+        elif annual_total <= 58000:
+            pct = 0.15
+        elif annual_total <= 86900:
+            pct = 0.23
+        elif annual_total <= 123100:
+            pct = 0.375
+        else:
+            pct = 0.465   # top rate (≤ 181,000 and above)
+
+        result = -(extra_earn * pct)
+
+This rule is conditional — it only fires when ExtraTaxEarnings > 0. The
+rate is determined by the employee’s total annual income level but
+applied only to the bijzondere beloning amount. This is a separate rate
+table from the regular loonbelasting brackets.
+
+Step 12 — ZV_ER and OV_ER (Seq 120, 121, hidden)
+
+    # Seq 120 — ZV_ER
+    ZV_OV_CEILING_MONTHLY = 7146.10   # XCG 85,753.20/year ÷ 12
+    emp_salary = min(contract.wage, ZV_OV_CEILING_MONTHLY)
+    result = emp_salary * 0.019
+    # Seq 121 — OV_ER
+    ZV_OV_CEILING_MONTHLY = 7146.10
+    emp_salary = min(contract.wage, ZV_OV_CEILING_MONTHLY)
+    ov_pct     = contract.l10n_cw_ov_percentage / 100.0
+    result     = emp_salary * ov_pct
+
+Both ZV and OV use contract.wage (base salary only, excluding fringe
+benefits) as the base, capped at the ZV/OV wage ceiling. ZV and BVZ are
+separate statutory insurances and must not be combined. The OV industry
+rate (l10n_cw_ov_percentage) is a new field added to hr.contract by this
+module.
+
+Step 13 — NET and NONTAXED (Seq 130, 140)
+
+    # Seq 130 — NET
+    # categories.DED is negative (all deduction rules return negative values)
+    result = categories.BASIC + categories.ALW + categories.DED
+    # Seq 140 — NONTAXED (onbelaste vergoedingen)
+    nontaxed = inputs.NONTAXED_AMT.amount if inputs.NONTAXED_AMT else 0.0
+    result   = nontaxed
+
+NONTAXED is added to the net payment on the payslip. It is not a
+deduction and not subject to any premium or tax. It appears as a
+separate line on the payslip and is posted to a dedicated G/L account
+for expense reimbursements payable.
+
+Step 14 — TOTAL_ER_COST (Seq 150, hidden)
+
+    # Informational summary of total employer cost
+    result = rules.TOTAL_LOON.amount + categories.ER
+
+This rule does not affect the employee’s net pay. It is used for labor
+cost reporting and management information only.
+
+Cessantia (Seq 160, hidden)
+
+    # Fixed statutory amount per employee per year
+    # XCG 40.00/year = XCG 3.33/month (provisioned monthly)
+    result = 40.0 / 12
+
+Corrected from v1.0D: Cessantia is not a percentage of salary. It is a
+fixed statutory contribution of XCG 40.00 per employee per year,
+provisioned as XCG 3.33 per month. Source: SVB Curaçao 2026 official
+rate publication. This is an employer-only cost with no employee
+deduction.
+
+Tax Bracket Model and Rate Management
+
+2026 Official Rates — Belastingdienst Curaçao
+
+Loonbelasting progressive brackets (applied to annual TaxIncome):
+
+  ------------------------------------------------------------------------
+  Bracket     Income From (XCG)          Income To (XCG)         Rate
+  ----------- -------------------------- ----------------------- ---------
+  1           0                          39,094                  9.75%
+
+  2           39,094                     52,127                  15%
+
+  3           52,127                     78,190                  23%
+
+  4           78,190                     110,769                 30%
+
+  5           110,769                    162,894                 37.5%
+
+  6           162,894                    (geen plafond)          46.5%
+  ------------------------------------------------------------------------
+
+  : Figure : Payroll Run Lifecycle (State Machine)
+
+NOTE - bracket calculation vs. lookup table.
+Belastingdienst Curaçao publishes both a progressive bracket table
+(Schijven-tarief-2026) and a pre-calculated monthly lookup table
+(lb-maandtabel-2026, 18 pages, XCG 0–16,670). Both are valid
+implementation approaches. This module uses the bracket calculation
+method because: (1) it requires no 18-page data import; (2) it handles
+any salary level including above the table ceiling; (3) rate changes
+require only updating bracket records, not reimporting an entire lookup
+table; and (4) it is auditable — every step of the calculation is
+traceable. The monthly lookup table is labelled Exclusief basiskorting,
+confirming that the basiskorting (XCG 2,915/year) is applied as a
+post-table monetary deduction; consistent with our design.
+
+Toeslagen 2026 (monetary deductions from computed tax amount; not income
+reductions):
+
+  ---------------------------------------------------------------------------------
+  Toeslag                   Annual Amount (XCG)     Field on hr.employee
+  ------------------------- ----------------------- -------------------------------
+  Basisaftrek               2,915                   Automatic — all employees
+
+  Alleenverdienerstoeslag   1,779                   l10n_cw_only_earner_deduction
+
+  Kindertoeslag — 1st child 948                     l10n_cw_child_deduction
+                                                    (cumulative)
+
+  Kindertoeslag — 2nd child 475                     (added to above)
+
+  Kindertoeslag — 3rd child 124                     (added to above)
+
+  Kindertoeslag — 4th       96                      (added to above)
+  child+                                            
+
+  Ouderentoeslag (standard) 1,342                   l10n_cw_old_age_deduction
+
+  Ouderentoeslag (reduced)  673                     (alternative value)
+  ---------------------------------------------------------------------------------
+
+  : : Payroll Calculation Sequence Map
+
+Bijzondere beloningen rate table (ExtraTax — separate from regular
+loonbelasting):
+
+  -----------------------------------------------------------------------
+  Annual TotalLoon (XCG)         Rate Applied to Bijzondere Beloning
+  ------------------------------ ----------------------------------------
+  ≤ 43,500                       9.75%
+
+  ≤ 58,000                       15.00%
+
+  ≤ 86,900                       23.00%
+
+  ≤ 123,100                      37.50%
+
+  ≤ 181,000                      46.50%
+  -----------------------------------------------------------------------
+
+  : Listing : Enabled flag pattern
+
+NOTE - twee varianten van de tabel bijzondere beloningen.
+Belastingdienst Curaçao publishes two versions of the bijzondere
+beloningen rate table: (1) Exclusief basiskorting — starts taxing from
+XCG 0 at 9.75%; basiskorting is applied separately as a post-table
+monetary deduction. (2) Inclusief basiskorting — has a 0% band from XCG
+0 to XCG 33,300 with the basiskorting already embedded; the remaining
+rates are identical. This module uses the exclusief variant, consistent
+with the approach used for the regular loonbelasting table. The
+basiskorting (XCG 2,915/year) is applied as a single post-calculation
+deduction across both regular loonbelasting and bijzondere beloningen,
+keeping the architecture uniform and avoiding double deduction.
+
+2026 Official Rates — SVB Curaçao
+
+  -------------------------------------------------------------------------
+  Premium                Employee %    Employer %     Annual Ceiling (XCG)
+  ---------------------- ------------- -------------- ---------------------
+  AOV/AWW (combined)     6.5%          9.5%           100,000
+
+  AOV above ceiling      1.0%          —              No ceiling
+  (employee only)                                     
+
+  AVBZ                   0.5% or 1.5%* 0.5%           606,247.08
+
+  BVZ                    Sliding       9.3%           150,000
+                         0%–4.3%**                    
+
+  ZV                     —             1.9%           85,753.20/year
+
+  OV                     —             0.5%–5.0%      85,753.20/year
+                                                      (shared with ZV)
+
+  Cessantia              —             XCG 40/year    —
+                                       (fixed)        
+  -------------------------------------------------------------------------
+
+  : : Rules Exempt from Enable/Disable Flag
+
+*AVBZ employee: 0.5% if annual AOV income < XCG 29,897.44; otherwise
+1.5%.
+
+**BVZ employee: 0% below XCG 12,000/year, graduating to full 4.3% above
+XCG 18,000/year.
+
+Rate Update Procedure
+
+1.  Open: Salarisadministratie → Configuratie → Tarieven
+2.  Set valid_to on all expiring records
+3.  Create new records with updated valid_from and rates
+4.  Never delete historical records — needed for payslip recomputation
+5.  No code deployment required
+
+Payroll Run Lifecycle
+
+hr.payslip.run states: draft → verify → close
+
+hr.payslip states: draft → verify → done / cancel
+
+Recomputation is permitted in all states before close. Closing the run
+locks all payslips and triggers journal entry generation via
+hr_payroll_account.
+
+Cessantia — explicitly out of scope
+
+Cessantia is a statutory severance obligation governed by the
+Cessantialandsverordening of Curaçao. It is payable by the employer (to
+the employee) upon termination of employment and is settled directly
+between the parties at that time. It is not a periodic payroll
+contribution and is therefore explicitly outside the scope of this
+module. No salary rule, journal entry line, or GL account mapping is
+defined for Cessantia in l10n_cw_hr_payroll. Employers must account for
+Cessantia obligations separately, outside the payroll system.
+
+Accounting Integration
+
+GL Account Mapping
+
+The journal entry is extended in v2.0D to include ZV, OV, NonTaxed,
+ExtraTax, and the corrected Cessantia line.
+
+  -----------------------------------------------------------------------
+  Rule Code         GL Account        Side              Description
+  ----------------- ----------------- ----------------- -----------------
+  TOTAL_LOON        6100              Debit             Salary expense
+                                                        (gross incl.
+                                                        fringe benefits)
+
+  AOV_AWW_ER        6200              Debit             Employer AOV/AWW
+                                                        cost
+
+  AVBZ_ER           6210              Debit             Employer AVBZ
+                                                        cost
+
+  BVZ_ER            6220              Debit             Employer BVZ cost
+
+  ZV_ER             6230              Debit             Employer ZV cost
+
+  OV_ER             6240              Debit             Employer OV cost
+
+  CESSANTIA         6250              Debit             Cessantia
+                                                        provisioning (XCG
+                                                        40/yr)
+
+  NONTAXED          6260              Debit             Onbelaste
+                                                        vergoedingen
+                                                        (employer cost)
+
+  NET               2100              Credit            Net salary
+                                                        payable to
+                                                        employees
+
+  LOONBEL +         2200              Credit            Loonbelasting
+  EXTRA_TAX                                             payable to
+                                                        Belastingdienst
+                                                        CW
+
+  AOV_AWW_EMP +     2300              Credit            Total AOV/AWW
+  AOV_AWW_ER +                                          payable to SVB
+  AOV_AWW_1PCT                                          
+
+  AVBZ_EMP +        2310              Credit            Total AVBZ
+  AVBZ_ER                                               payable
+
+  BVZ_EMP + BVZ_ER  2320              Credit            Total BVZ payable
+                                                        to SVB
+
+  ZV_ER             2330              Credit            ZV payable to SVB
+
+  OV_ER             2340              Credit            OV payable to SVB
+
+  NONTAXED          2350              Credit            Onbelaste
+                                                        vergoedingen
+                                                        payable to
+                                                        employee
+
+  CESSANTIA         2360              Credit            Cessantia payable
+                                                        (provision)
+  -----------------------------------------------------------------------
+
+  : Listing : Seq 10: Totaal Loon
+
+GL account numbers are indicative. Configure to match the company’s
+Chart of Accounts.
+
+Balance Verification
+
+Total debit = TOTAL_LOON + AOV_AWW_ER + AVBZ_ER + BVZ_ER + ZV_ER +
+OV_ER + CESSANTIA + NONTAXED
+
+Total credit = NET + LOONBEL + EXTRA_TAX + (all employee + employer
+premium payables) + NONTAXED + CESSANTIA
+
+By definition of NET: TOTAL_LOON = NET + all employee deductions. The
+employer costs debit equals the sum of all payable credits. Debit =
+Credit ✓
+
+Security and Access Control
+
+User Groups
+
+  -------------------------------------------------------------------------------
+  Group                   Technical Name                  Access Level
+  ----------------------- ------------------------------- -----------------------
+  Employee                group_l10n_cw_employee          Read own payslips only
+
+  Payroll User            group_l10n_cw_payroll_user      Compute runs, edit
+                                                          employee wage lines and
+                                                          payslip descriptions,
+                                                          read tax brackets
+
+  Payroll Manager         group_l10n_cw_payroll_manager   Full access including
+                                                          tax bracket management
+                                                          and reopening closed
+                                                          runs
+
+  Accountant              group_l10n_cw_accountant        Read payroll runs and
+                                                          journal entries; no
+                                                          write access to payroll
+                                                          computation
+  -------------------------------------------------------------------------------
+
+  : Listing : Seq 20: BVZ Premium Total
+
+Record Rules
+
+    <record id="rule_payslip_employee_own" model="ir.rule">
+        <field name="name">Employee: own payslips only</field>
+        <field name="model_id" ref="hr_payroll.model_hr_payslip"/>
+        <field name="groups" eval="[(4, ref('group_l10n_cw_employee'))]"/>
+        <field name="domain_force">
+            [('employee_id.user_id', '=', user.id)]
+        </field>
+    </record>
+
+Data Protection Compliance
+
+Payroll data constitutes personal data under the Landsverordening
+bescherming persoonsgegevens (A.B. 2010 no. 84). The module applies:
+
+-   Principle of least privilege enforced via group-based access
+-   Audit trail via mail.thread on all custom models
+-   Tax bracket records are append-only by design
+-   No payroll data transmitted to external services
+
+Module File Structure
+
+    l10n_cw_hr_payroll/
+    ├── __manifest__.py
+    ├── __init__.py
+    │
+    ├── models/
+    │   ├── __init__.py
+    │   ├── hr_salary_rule.py           # Extends hr.salary.rule: adds singleton field
+    │   ├── hr_contract.py              # Extends hr.contract: adds l10n_cw_ov_percentage
+    │   ├── hr_employee.py              # Extends hr.employee: adds toeslag fields
+    │   ├── hr_wage_component_set.py    # New: Tier 2 component set + set lines
+    │   ├── hr_employee_wage_line.py    # New: Tier 3 per-employee wage lines
+    │   └── hr_tax_bracket.py           # New: tax bracket model + compute_tax()
+    │
+    ├── wizard/
+    │   └── hr_wage_set_apply_wizard.py    # Tier 2 → Tier 3 application wizard
+    │
+    ├── data/
+    │   ├── hr_payroll_structure_type_data.xml    # CWMONTHLY structure type
+    │   ├── hr_payroll_structure_data.xml         # CWSTAFF structure
+    │   ├── hr_salary_rule_category_data.xml      # GROSS, ER categories
+    │   ├── hr_salary_rule_data.xml               # All CW salary rules (Steps 1–14)
+    │   └── hr_tax_bracket_data.xml              # 2026 official rates
+    │
+    ├── views/
+    │   ├── hr_tax_bracket_views.xml
+    │   ├── hr_wage_component_set_views.xml
+    │   ├── hr_employee_wage_line_views.xml
+    │   ├── hr_salary_rule_views.xml              # Adds singleton field to rule form
+    │   ├── hr_contract_views.xml                 # Adds OV percentage field
+    │   ├── hr_employee_views.xml                 # Adds toeslag fields
+    │   └── hr_payroll_menu.xml
+    │
+    ├── report/
+    │   ├── report_payslip_template.xml           # Loonstrook QWeb template
+    │   ├── report_lb_aangifte.xml                # Loonbelasting declaration
+    │   └── report_svb_premies.xml               # SVB premium declaration
+    │
+    ├── security/
+    │   ├── ir.model.access.csv
+    │   └── hr_payroll_security.xml               # Groups and record rules
+    │
+    └── i18n/
+        └── nl.po                                 # Dutch UI translations
+
+Key __manifest__.py Fields
+
+    {
+        'name':     'Payroll — Curaçao',
+        'version':  '19.0.0.1.0',
+        'category': 'Accounting/Localizations/Payroll',
+        'summary':  'Curaçao payroll localization: loonbelasting, SVB premiums, three-tier wage model',
+        'author':   '[COMPANY]',
+        'license':  'OPL-1',
+        'countries': ['cw'],
+        'depends': [
+            'hr',
+            'hr_contract',
+            'hr_holidays',
+            'hr_payroll',
+            'hr_payroll_account',
+            'hr_attendance',
+        ],
+        'data': [
+            'security/ir.model.access.csv',
+            'security/hr_payroll_security.xml',
+            'data/hr_payroll_structure_type_data.xml',
+            'data/hr_salary_rule_category_data.xml',
+            'data/hr_payroll_structure_data.xml',
+            'data/hr_salary_rule_data.xml',
+            'data/hr_tax_bracket_data.xml',
+            'views/hr_tax_bracket_views.xml',
+            'views/hr_wage_component_set_views.xml',
+            'views/hr_employee_wage_line_views.xml',
+            'views/hr_salary_rule_views.xml',
+            'views/hr_contract_views.xml',
+            'views/hr_employee_views.xml',
+            'views/hr_payroll_menu.xml',
+            'report/report_payslip_template.xml',
+            'report/report_lb_aangifte.xml',
+            'report/report_svb_premies.xml',
+        ],
+        'installable': True,
+        'application': False,
+        'auto_install': False,
+    }
+
+Open Design Decisions
+
+The following items are confirmed within the scope of the module but
+require explicit decisions from the organization or implementation
+partner before the detailed design phase can address them. They do not
+block the current design but must be resolved before development of the
+affected components begins.
+
+Employee Access to Payslips
+
+Standard Odoo provides two built-in mechanisms for employees to access
+their payslips, both available without custom development:
+
+  -------------------------------------------------------------------------
+  Mechanism         Description                          Requires
+  ----------------- ------------------------------------ ------------------
+  Odoo Employee     Employee logs in via web browser and Employee linked to
+  Portal[1]         views/downloads payslips as PDF from an Odoo portal
+                    their personal portal page. Access   user account
+                    is controlled by the existing        
+                    security group                       
+                    group_l10n_cw_employee.              
+
+  Odoo Employee     Employee accesses payslips directly  Employee linked to
+  App²              from the HR dashboard in the Odoo    an internal Odoo
+                    web or mobile app.                   user account
+
+  Automatic email   Payslip PDF is emailed to the        Email template
+  distribution[2]   employee automatically when the      configuration;
+                    payroll run is closed. Built into    decision on
+                    hr_payroll via a configurable action language
+                    on hr.payslip. Email template can be 
+                    localized to Dutch or Papiamentu.    
+  -------------------------------------------------------------------------
+
+  : Listing : Seq 30: BVZ Premium Employer
+
+A decision is required on which mechanism — or combination of mechanisms
+— will be offered to employees. If automatic email distribution is
+selected, an additional decision is required on the language of the
+email template (Dutch, Papiamentu, or English). This is a configuration
+and onboarding decision and does not require custom development unless a
+fully custom email template is needed.
+
+User Rights and Access Control
+
+The module defines four security groups covering the full range of
+payroll-related roles. The assignment of these groups to actual Odoo
+users is a per-organization configuration decision made during
+onboarding and is not prescribed by this document.
+
+  ----------------------------------------------------------------------------------
+  Security Group                  Typical Role           Assignment Decision
+  ------------------------------- ---------------------- ---------------------------
+  group_l10n_cw_employee          All employees that     Per organization —
+                                  have internal Odoo     typically assigned to all
+                                  user access; not       staff
+                                  portal employees!      
+
+  group_l10n_cw_payroll_user      Payroll administrator  Per organization —
+                                                         one or more designated
+                                                         staff
+
+  group_l10n_cw_payroll_manager   HR/payroll manager     Per organization —
+                                                         typically one or two senior
+                                                         staff
+
+  group_l10n_cw_accountant        Accountant or          Per organization —
+                                  financial controller   may overlap with existing
+                                                         accounting user
+  ----------------------------------------------------------------------------------
+
+  : Listing : Seq 40: BVZ Premium Employee
+
+The granular permissions within each group — such as which menus are
+visible, which actions are available, and which fields are editable —
+will be finalized during the detailed design phase in consultation with
+the organization. Any organization-specific access requirements that
+cannot be met by the four standard groups may require additional group
+definitions or record rules, which will be scoped at that time.
+
+Verzamelloonstaat — Upload Format
+
+The verzamelloonstaat is a statutory annual filing required by the
+Belastingdienst Curaçao. Every employer running a payroll must submit
+this document at the end of the calendar year via the Belastingdienst
+Curaçao online portal. The document summarizes all employees' annual
+wages, loonbelasting withheld, and social premiums for the full calendar
+year.
+
+The module will generate the verzamelloonstaat from
+hr.wage.component.ytd records as a CSV file conforming to the official
+Belastingdienst Curaçao import specification. Two specifications are
+currently in effect:
+
+-   Up to and including belastingjaar 2024 — the original specification
+    dating from 24 mei 2017, consisting of five record types: WG
+    (werkgever), WN (werknemer), DV (dienstverband), KD (kind), CO/AR
+    (artikel 56 contractors). The CSV filename convention is
+    belastingjaar-cribnr.csv (e.g. 2025-123789456.csv).
+-   From belastingjaar 2025 onwards — an updated specification published
+    by Belastingdienst Curaçao introducing changes to the WG and WN
+    record types, including: new fields DIENSTBETRK, LOONONBELOW,
+    AANTUUROW and LOONONBELJONG; removal of PREMIEZOG, GEHUWDAFTR and
+    PENSIOAFTR; and new fields ALLEENVTOESL and OUDERENTOESL replacing
+    the latter two. Additional fields support the Lei di Bion regeling
+    and pre-filling of inkomstenbelasting returns. The online portal
+    will be updated in early 2026 to support the new specification.
+    Until the portal update is confirmed live, both specifications
+    remain valid for import.
+
+The module will implement the 2025+ specification as the primary export
+format, with the pre-2025 format retained for reference. The CSV export
+is triggered from the payroll run interface after the last run of the
+calendar year is closed. Manual entry via the portal remains available
+as a fallback option.
+
+Loan Deductions
+
+Some organizations on Curaçao deduct loan repayments from employee
+salaries on behalf of lending institutions (banks). These deductions
+cover instruments such as mortgage payments and consumer loans. The
+employer acts as intermediary — collecting the repayment amount from the
+employee's salary and remitting it directly to the lending institution.
+
+Loan deductions have the following characteristics:
+
+-   Fixed periodic amount per loan — not calculated as a percentage of
+    salary
+-   Deducted after net salary calculation — does not affect any premium
+    or tax base
+-   Paid to a third party (the lending institution) — not to the
+    employee
+-   Multiple active loans per employee are possible simultaneously
+-   Each loan has a defined start date, end date, and fixed periodic
+    amount
+-   Appears as a separate named line on the payslip
+-   Generates a separate credit entry in the journal post to a
+    third-party payable account
+
+A dedicated model l10n_cw.employee.loan will be required in the
+application layer to track loan details per employee. The salary rule
+for loan deductions will use the partner_id field on hr.salary.rule to
+direct the payment to the correct third-party account in the journal
+entry. A decision is required on whether loan management (tracking
+outstanding balance, early repayment, etc.) is within scope or whether
+the module only handles the periodic deduction without balance tracking.
+
+Wage garnishments and attachments (loonbeslag) are treated within the
+same framework as loan deductions, using the same application-layer
+model extended with additional fields for the legal order reference,
+issuing authority, and priority sequence. However, they differ in two
+critical respects. First, garnishments are mandatory — the employer is
+legally obligated to apply them upon receipt of a court order or order
+from an authorized institution. Second, Curaçao law prescribes a minimum
+subsistence income (bestaansminimum) below which net pay may not be
+reduced regardless of the garnishment amount. The salary rule for
+garnishments must enforce this floor. A decision is required on the
+current statutory bestaansminimum amount and how it is maintained (as a
+configurable system parameter or as a hr.tax.bracket record).
+
+Overtime Rate Configuration
+
+A decision is required on which overtime types are to be supported at
+v1.0R and what the standard rates are per type. The design supports any
+number of overtime types via separate salary rules, each with a
+configurable rate stored on hr.employee.wage.line as parameter_value.
+The default rates shown in the sequence map are indicative and must be
+confirmed against the applicable labor regulations on Curaçao before
+v1.0R is finalized. An employee with no overtime in a period simply has
+zero hours entered for all overtime input codes — the rules evaluate to
+zero without error.
+
+Ziekteverzekering (ZV) — Sick Pay Processing
+
+When an employee is sick, the employer is legally obligated to pay
+ziekengeld on the normal salary payment date. The SVB reimburses the
+employer afterwards as a separate claim process outside the payroll
+system. The payroll module must correctly reflect the net salary impact
+and show the ZV ziekengeld as a distinct line on the payslip.
+
+The following rules apply based on the SVB ZV regulations:
+
+  -----------------------------------------------------------------------
+  Rule                 Detail
+  -------------------- --------------------------------------------------
+  Coverage condition   Only employees working 5 or 6 days per week with a
+                       salary below the ZV wage ceiling (XCG
+                       7,146.10/month) are ZV-insured
+
+  Waiting period       No ziekengeld is paid over the first 3 calendar
+                       days of illness. These days are a full salary
+                       deduction with no ZV compensation
+
+  Ziekengeld rate      80% of dagloon from day 4 onwards (or from day 1
+                       if hospitalization is required and illness exceeds
+                       3 days)
+
+  Maximum duration     Ziekengeld right expires 2 years after the first
+                       sick notification for the same illness cause
+
+  SVB reimbursement    The employer pays the employee and recovers the
+                       80% from SVB via a separate claim — this is
+                       outside the payroll system
+  -----------------------------------------------------------------------
+
+  : Listing : Seq 50: AOV/AWW Premium Total
+
+The payslip must show three distinct lines when ZV applies:
+
+  -------------------------------------------------------------------------
+  Payslip Line         Code         Calculation                   On
+                                                                  Payslip
+  -------------------- ------------ ----------------------------- ---------
+  Base salary          SICK_DED     − (sick hours × hourly rate)  Yes
+  reduction for sick                                              
+  hours                                                           
+
+  ZV ziekengeld (SVB,  ZV_SICK      + 80% × (sick hours beyond    Yes
+  80%)                              waiting period × hourly rate) 
+
+  Net sick pay effect  —            − 20% of sick hours × hourly  No
+                                    rate (informational)          
+  -------------------------------------------------------------------------
+
+  : Listing : Seq 60, 61, 62: AOV/AWW Premium Employee and Employer
+
+The following decisions are required before this feature can be designed
+in detail:
+
+-   How is the 3-day waiting period tracked per illness episode — via a
+    dedicated field on the leave record, or via a manual payslip input
+    entered by the payroll administrator?
+-   How are illness episodes spanning multiple payroll periods handled —
+    does the waiting period carry over from one month to the next?
+-   Is the SVB reimbursement claim tracked in Odoo (as a receivable) or
+    managed entirely outside the system?
+-   For employees above the ZV wage ceiling — does the organization pay
+    80% voluntarily or 100%? This affects the ZV_SICK rule logic.
+
+This feature requires integration with the hr_holidays module. A
+dedicated ZV sick leave type must be created, and the worked_days object
+on the payslip must correctly reflect sick hours as a separate category
+from regular worked hours and annual leave.
+
+Deferred Items and Future Odoo App Versions
+
+  -------------------------------------------------------------------------------------------
+  Item                             Reason for Deferral                Target Version
+  -------------------------------- ---------------------------------- -----------------------
+  GL account mapping — final       Company CoA not yet finalized      v1.1R
+  account numbers                                                     
+
+  Module distribution strategy     Odoo.sh submodule vs. private      v1.0R
+                                   registry decision pending          
+
+  Loonbelastingkaart (jaaropgaaf)  Annual wage tax statement issued   v1.1R
+                                   to each employee for use in their  
+                                   personal income tax return         
+                                   (inkomstenbelasting). Summarizes   
+                                   total annual gross wages,          
+                                   loonbelasting withheld, and social 
+                                   premiums withheld (AOV/AWW, AVBZ,  
+                                   BVZ) per employee. Generated as a  
+                                   QWeb PDF report after the last     
+                                   payroll run of the calendar year   
+                                   is closed. Depends on              
+                                   hr.wage.component.ytd for accurate 
+                                   annual totals.                     
+
+  Electronic filing —              Portal API not yet publicly        v2.0R
+  Belastingdienst CW               documented                         
+
+  Extension to Aruba / Sint        Similar legislative framework but  v2.0R
+  Maarten                          separate rate structures           
+
+  DGA                              Separate tax treatment required    v1.2R
+  (directeur-grootaandeelhouder)                                      
+  payroll                                                             
+
+  Pension fund integrations (APC,  External API dependencies not yet  v2.0R
+  FATUM, ENNIA)                    scoped                             
+
+  Beschikking — multi-year         Ruling validity periods not yet    v1.!R
+  tracking                         modeled                            
+
+  AVBZ low-income threshold —      XCG 29,897.44 threshold must be    Ongoing
+  annual verification              verified annually against          
+                                   Landsverordening updates           
+
+  Additional pay period types      Version 1.x is intentionally       V1.1R
+  (bi-weekly, semi-monthly,        scoped to monthly payroll only.    
+  weekly)                          The Belastingdienst Curaçao        
+                                   publishes separate tax tables for  
+                                   each period type                   
+                                   (lb-kwartaaltabel, lb-weektabel,   
+                                   lb-quincenatabel,                  
+                                   lb-halvedagtabel). The             
+                                   architecture supports extension    
+                                   via additional                     
+                                   hr.payroll.structure.type records  
+                                   and the corresponding              
+                                   PeriodsPerYear divisor.            
+
+  SVB gevarenklasse dropdown for   Requires complete official SVB     v1.1R
+  OV percentage                    industry classification list with  
+                                   OV percentages. Plain Float field  
+                                   on hr.contract is used as interim. 
+                                   Will be replaced by Many2one →     
+                                   l10n_cw.svb.industry in detailed   
+                                   design phase.                      
+
+  Cessantia                        Explicitly out of scope. Cessantia N/A — permanent
+                                   is a termination obligation        exclusion
+                                   settled directly between employer  
+                                   and employee under the             
+                                   Cessantialandsverordening. It is   
+                                   not a periodic payroll calculation 
+                                   and will not be implemented in any 
+                                   version of this module.            
+
+  Payslip distribution             Mechanism for employee payslip     v1.0R
+  configuration                    access (portal, app, or email) to  
+                                   be decided. Configuration and      
+                                   optional email template            
+                                   localization to be completed       
+                                   during onboarding.                 
+
+  User rights assignment and       Group-to-user assignment and       v1.0R
+  granular permissions             detailed permission configuration  
+                                   are per-client onboarding          
+                                   decisions. Granular permission     
+                                   requirements to be confirmed       
+                                   during detailed design.            
+
+  Verzamelloonstaat CSV export     Statutory annual employer filing   v1.1R
+                                   for Belastingdienst Curaçao        
+                                   portal. CSV format fully specified 
+                                   — pre-2025 and 2025+               
+                                   specifications both documented.    
+                                   Implementation depends on          
+                                   hr.wage.component.ytd. PDF version 
+                                   and CSV export targeted for v1.1R. 
+                                   Lei di Bion fields (2025+          
+                                   specification) to be confirmed     
+                                   with Belastingdienst CW before     
+                                   implementation.                    
+
+  Loan deductions and wage         Per-employee periodic deductions   v1.1R
+  garnishments                     remitted to third-party            
+                                   institutions. Loan deductions are  
+                                   voluntary employer intermediary    
+                                   services; wage garnishments        
+                                   (loonbeslag) are mandatory         
+                                   court-ordered or authority-ordered 
+                                   deductions. Both use the same      
+                                   application-layer model            
+                                   l10n_cw.employee.loan.deduction,   
+                                   extended with legal order          
+                                   reference and priority fields for  
+                                   garnishments. Garnishment rules    
+                                   must enforce the statutory         
+                                   bestaansminimum floor. Decision    
+                                   required on scope of balance       
+                                   tracking and current               
+                                   bestaansminimum amount.            
+
+  ZV sick pay processing           Requires integration with          v1.1R
+                                   hr_holidays, a 3-day waiting       
+                                   period mechanism per illness       
+                                   episode, wage ceiling check, and   
+                                   decisions on SVB reimbursement     
+                                   tracking. Too complex for v1.0R.   
+                                   Decisions listed in Open Design    
+                                   Decisions section must be resolved 
+                                   first.                             
+  -------------------------------------------------------------------------------------------
+
+  : Listing : Seq 70, 71: AVBZ Employee and Employer
+
+-   Items that are close to complete and logically belong in the first
+    release after v1.0R → v1.1R
+-   Items requiring significant additional work but still within the
+    first major version → v1.2R
+-   Items requiring substantial architectural additions or external
+    dependencies → v2.0R
+-   Module distribution strategy is a pre-release concern → v1.0R
+
+[COMPANY] - Technical Design Document:
+technical-design-l10n_cw_hr_payroll-v3.0D - 02 June 2026
+
+Tables of Figures, Listings and Tables
+
+Figure 1: Module Dependency Architecture 1
+
+Figure 2: Three-Tier Wage Component 1
+
+Figure 3: Payroll Run Lifecycle (State Machine) 1
+
+Listing 1: Direct Dependencies 1
+
+Listing 2: Python Computation Context 2
+
+Listing 3: Working Hours Normalization 2
+
+Listing 4: Extension to hr.salary Model 2
+
+Listing 5: Core Method 4
+
+Listing 6: Enabled flag pattern 2
+
+Listing 7: Seq 10: Totaal Loon 3
+
+Listing 8: Seq 20: BVZ Premium Total 4
+
+Listing 9: Seq 30: BVZ Premium Employer 4
+
+Listing 10: Seq 40: BVZ Premium Employee 4
+
+Listing 11: Seq 50: AOV/AWW Premium Total 5
+
+Listing 12: Seq 60, 61, 62: AOV/AWW Premium Employee and Employer 5
+
+Listing 13: Seq 70, 71: AVBZ Employee and Employer 5
+
+Listing 14: Projected Module Files 14
+
+Listing 15: Key Manifest Fields 15
+
+Table 1: Exclusion of Odoo SaaS 2
+
+Table 2: HR Wage Component Set 2
+
+Table 3: HR Wage Component Set Line 2
+
+Table 4: HR Wage Component Year-to-Date 3
+
+Table 5: HR Tax Bracket 4
+
+Table 6: Payroll Input Values 5
+
+Table 7: Employee Wage Line States 5
+
+Table 8: Payroll Calculation Sequence Map 1
+
+Table 9: Rules Exempt from Enable/Disable Flag 2
+
+Table 10: Loonbelasting Progressive Tax Brackets (2026) 9
+
+Table 11: Toeslagen (2026) 9
+
+Table 12: Bijzondere Beloningen Rate Table (2026) 9
+
+Table 13: SVB Curaçao Official Rates (2026) 10
+
+Table 14: GL Account Mapping in Odoo (derived from company’s Chart of
+Accounts) 12
+
+Table 15: User Security Groups in Odoo 13
+
+Table 16: Odoo Built-in Employee Access to Payslips 16
+
+Table 17: Reports - hr_payrool in Odoo 19.0 i
+
+Table 18: Reports - Custom ii
+
+APPENDIX A—Reports
+
+This appendix provides a complete inventory of all reports relevant to
+the l10n_cw_hr_payroll module. Reports are classified in two categories:
+standard Odoo 19 reports that are available without custom development
+(A-series), and custom reports that must be designed and built as part
+of this module (B-series). The target version column indicates in which
+software release each report is planned.
+
+A-Series — Standard Odoo 19 Reports
+
+The following reports are available natively in Odoo 19.0 Enterprise
+with hr_payroll installed. No custom development is required. Where
+noted, the report template is customized by l10n_cw_hr_payroll for
+Curaçao-specific content and layout.
+
+  -----------------------------------------------------------------------------
+  Code   Report Name    Dutch Name         Description            Customized by
+                                                                  l10n_cw
+  ------ -------------- ------------------ ---------------------- -------------
+  A-01   Payslip PDF    Loonstrook         Individual payslip per Yes — Curaçao
+                                           employee per pay run.  layout and
+                                           QWeb PDF template.     wage
+                                                                  component
+                                                                  codes
+
+  A-02   Payroll        Salarisanalyse     Pivot table report:    No
+         Analysis                          payslip count,         
+                                           paid/unpaid leave      
+                                           days, net and gross    
+                                           wage by department.    
+                                           Supports               
+                                           period-over-period     
+                                           variance.              
+
+  A-03   Payslip Lines  Loonregelrapport   Detailed breakdown of  No
+         Report                            individual payslip     
+                                           components across all  
+                                           employees. New in Odoo 
+                                           19 — payroll master    
+                                           report available for   
+                                           all localizations.     
+
+  A-04   Worked Days    Gewerkte Dagen     Analysis of worked     No
+         Analysis       Analyse            days, hours, and       
+                                           payroll period data    
+                                           per employee.          
+
+  A-05   Payment Report Betalingsrapport   Batch salary payment   Yes — Curaçao
+                                           file for bank          bank format
+                                           transfer. Default      (TBD)
+                                           formats: NACHA and     
+                                           CSV. Extended by       
+                                           l10n_cw for Curaçao    
+                                           bank formats. See      
+                                           B-09.                  
+
+  A-06   Pay Run        Loonrun Overzicht  Overview of all        No
+         Overview                          payslips within a pay  
+                                           run — status, amounts, 
+                                           employee list.         
+  -----------------------------------------------------------------------------
+
+  : : Loonbelasting Progressive Tax Brackets (2026)
+
+B-Series — Custom Reports
+
+The following reports do not exist in standard Odoo and must be designed
+and built as part of l10n_cw_hr_payroll. Reports marked v1.0R are
+required for the initial production release. Reports marked v1.1R or
+later are deferred — see the Deferred Items table for reasoning.
+
+  -------------------------------------------------------------------------------------------------------------
+  Code   Report Name         Dutch Name               Description             Data Source             Target
+                                                                                                      Version
+  ------ ------------------- ------------------------ ----------------------- ----------------------- ---------
+  B-01   Wage Tax            Aangifte Loonbelasting   Monthly wage tax        hr.payslip.line         v1.0R
+         Declaration                                  declaration for                                 
+                                                      Belastingdienst                                 
+                                                      Curaçao. Per pay run.                           
+                                                      Shows taxable wage,                             
+                                                      toeslagen applied, and                          
+                                                      loonbelasting withheld                          
+                                                      per employee and in                             
+                                                      total                                           
+
+  B-02   SVB Premium         Aangifte Sociale Premies Monthly SVB premium     hr.payslip.line         v1.0R
+         Declaration         SVB                      declaration covering                            
+                                                      AOV/AWW, AVBZ, BVZ, ZV                          
+                                                      and OV — employee and                           
+                                                      employer shares — per                           
+                                                      pay run.                                        
+
+  B-03   Annual Tax          Loonbelastingkaart       Annual wage tax         hr.wage.component.ytd   v1.1R
+         Statement           (Jaaropgaaf)             statement per employee                          
+                                                      for use in their                                
+                                                      personal income tax                             
+                                                      return                                          
+                                                      (inkomstenbelasting).                           
+                                                      Issued after the last                           
+                                                      pay run of the calendar                         
+                                                      year.                                           
+
+  B-04   Verzamelloonstaat   Verzamelloonstaat CSV    Annual collective wage  hr.wage.component.ytd   v1.1R
+         CSV                 Export                   statement in the                                
+                                                      official                                        
+                                                      Belastingdienst Curaçao                         
+                                                      CSV format for portal                           
+                                                      upload. Two format                              
+                                                      variants: pre-2025                              
+                                                      (original                                       
+                                                      specification) and                              
+                                                      2025+ (Lei di Bion                              
+                                                      extended                                        
+                                                      specification).                                 
+
+  B-05   Payroll Journal     Salarisjournaalboeking   Balanced payroll        account.move            v1.0R
+         Entry Summary                                journal entry per pay                           
+                                                      run — debits (salary                            
+                                                      expense, employer                               
+                                                      contributions) versus                           
+                                                      credits (net payable,                           
+                                                      tax payable, premium                            
+                                                      payables). Printable                            
+                                                      document accompanying                           
+                                                      the accounting entry.                           
+
+  B-06   Employee Labor Cost Loonkostenrapport per    Year-to-date labor cost hr.wage.component.ytd   v1.1R
+         Report (YTD)        Medewerker               per employee: gross                             
+                                                      salary, all employer                            
+                                                      contributions, and                              
+                                                      total employment cost.                          
+                                                      For management                                  
+                                                      reporting and                                   
+                                                      budgeting.                                      
+
+  B-07   Department Labor    Loonkostenrapport per    Same as B-06 aggregated hr.wage.component.ytd   v1.1R
+         Cost Report (YTD)   Afdeling                 by department. For cost                         
+                                                      center reporting.                               
+
+  B-08   ZV Sick Pay         ZV Ziekengeld Overzicht  Per pay run overview of hr.payslip.line         v1.1R
+         Overview                                     ZV sick pay: sick                               
+                                                      employees, sick days                            
+                                                      entered, waiting period                         
+                                                      days, ZV-covered days,                          
+                                                      and SVB reimbursement                           
+                                                      amount. Used by the                             
+                                                      payroll administrator                           
+                                                      to file the SVB                                 
+                                                      reimbursement claim.                            
+
+  B-09   Batch Salary        Batch Salarisbetaling    Salary payment file for hr.payslip              TBD
+         Payment Export      Export                   upload to the                                   
+                                                      organization's bank                             
+                                                      online banking                                  
+                                                      platform. Format varies                         
+                                                      per bank — Curaçao bank                         
+                                                      formats to be                                   
+                                                      researched and                                  
+                                                      confirmed. See A-05.                            
+  -------------------------------------------------------------------------------------------------------------
+
+  : : Toeslagen (2026)
+
+[1] Odoo built-in
+
+[2] Odoo built-in but requires explicit configuration — it does not work
+out of the box without setting up the action and email template.
