@@ -1,0 +1,118 @@
+# ─────────────────────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Test / coverage / linters
+.pytest_cache/
+.cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.pylint.d/
+
+# ─────────────────────────────────────────────────────────────
+# Odoo
+# ─────────────────────────────────────────────────────────────
+# Odoo configuration (may contain credentials / db passwords)
+*.conf
+odoo.cfg
+.odoorc
+
+# Odoo runtime data
+.odoo/
+filestore/
+sessions/
+*.log
+
+# Compiled translation catalogs (keep source .po / .pot)
+*.mo
+
+# Locally generated assets (do not commit bundled JS/CSS)
+**/static/lib/
+**/static/**/*.min.js
+**/static/**/*.min.css
+
+# Database dumps / backups
+*.sql
+*.sql.gz
+*.dump
+*.zip
+
+# Odoo.sh / deployment artifacts
+.odoosh/
+
+# ─────────────────────────────────────────────────────────────
+# Secrets / environment
+# ─────────────────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+secrets.*
+
+# ─────────────────────────────────────────────────────────────
+# IDEs / editors
+# ─────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+
+# ─────────────────────────────────────────────────────────────
+# OS files
+# ─────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ─────────────────────────────────────────────────────────────
+# Documentation build output (keep sources under docs/)
+# ─────────────────────────────────────────────────────────────
+docs/_build/
+*.pdf.tmp
+~$*.docx
+~$*.xlsx
