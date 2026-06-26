@@ -10,7 +10,7 @@ inputDocuments:
 l10n_cw_hr_payroll — Epic Breakdown
 :::
 ::: {custom-style="Subtitle"}
-Curaçao Payroll Localization for Odoo 19 Enterprise — v1.0R
+Curaçao Payroll Localization for Odoo 19 Enterprise — version 19.0.0.1.0
 :::
 
 # Epic Breakdown
@@ -65,6 +65,11 @@ This document provides the complete epic and story breakdown for l10n_cw_hr_payr
 - FR026: Provide four security roles (Employee, Payroll User, Payroll Manager, Accountant) enforcing least privilege.
 - FR027: Restrict employees to their own payslips via a record rule (`employee_id.user_id = user`).
 
+**Run membership & contract period**
+
+- FR028: A payroll run **automatically** excludes an employee for a period when (a) the employee has no worked hours in that period, or (b) the employee is no longer in service (contract ended on or before the period). Exclusion is automatic — never a manual admin action; excluded employees get no payslip and do not appear in run totals or the journal.
+- FR029: Each employment contract has a mandatory start date and an optional end date; entering an end date marks when the employee leaves service. The run uses these dates to determine whether an employee is in service for the period (per FR028). Open-ended permanent contracts (no end date) are permitted.
+
 ### NonFunctional Requirements
 
 - NFR001: **Statutory correctness** — calculation output reconciles to the official 2026 Belastingdienst/SVB publications within XCG 0.02 (rounding tolerance), for representative employees (standard, BVZ-exempt, above-ceiling, with bijzondere beloning).
@@ -103,7 +108,7 @@ This document provides the complete epic and story breakdown for l10n_cw_hr_payr
 **Resolved / deferred open questions:**
 
 - AR017 (**RESOLVED — confirmed by product owner**): AD-14 — overtime **is** included in the premium income base. Confirmed via research (~90% of cases require inclusion; adopted for all). Premium bases derive from `categories.BASIC + categories.ALW`. No longer blocking; AD-14 promoted to `[ADOPTED]` in the spine.
-- AR018 (deferred, non-blocking): OQ-01 payslip distribution; OQ-03 confirm overtime default rates (150/150/200/200); OQ-04 granular per-group rights; OQ-05 final GL numbers; OQ-07 SVB gevarenklasse model (interim Float → future Many2one). Out of scope for v1.0R: additional pay periods, ZV sick pay, loans/garnishments, verzamelloonstaat/jaaropgaaf CSV, e-filing, DGA, Aruba/SXM.
+- AR018 (deferred, non-blocking): OQ-01 payslip distribution; OQ-03 confirm overtime default rates (150/150/200/200); OQ-04 granular per-group rights; OQ-05 final GL numbers; OQ-07 SVB gevarenklasse model (interim Float → future Many2one). Out of scope for v1.0R: hourly gross derivation from worked hours (v1.0R uses the fixed monthly wage; employees with no worked hours are automatically excluded, FR028); additional pay periods, ZV sick pay, loans/garnishments, verzamelloonstaat/jaaropgaaf CSV, e-filing, DGA, Aruba/SXM.
 
 ### UX Design Requirements
 
