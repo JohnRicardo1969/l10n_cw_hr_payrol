@@ -54,12 +54,12 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 - FR020: Stuur de run door zijn fasen (Concept → Te controleren → Afgesloten / CONCEPT → TE CONTROLEREN → AFGESLOTEN) en elke loonstrook door zijn fasen (Concept → Te controleren → Bevestigd / CONCEPT → TE CONTROLEREN → BEVESTIGD, met annuleren), waarbij herberekening vóór afsluiten is toegestaan.
 - FR021: Bevestig en vergrendel bij afsluiten de loonstroken, herbereken de jaar-tot-datum-totalen, boek de journaalpost en stel de run-rapporten beschikbaar — dit afsluiten is het enige punt waarop resultaten worden vastgelegd.
-- FR022: Genereer bij afsluiten een sluitende journaalpost (de boekingspost, `account.move`) waarbij totaal debet gelijk is aan totaal credit per constructie, met de configureerbare grootboekmapping.
+- FR022: Genereer bij afsluiten een sluitende journaalpost (de boekingspost, `account.move`) waarbij totaal debet gelijk is aan totaal credit per constructie, met de configureerbare grootboekmapping en de werkelijk berekende bedragen (2 decimalen).
 
 **Rapporten**
 
 - FR023: Produceer de loonstrook-PDF (rapport A-01) in Curaçaose lay-out.
-- FR024: Produceer de maandelijkse aangifte loonbelasting (rapport B-01) en de aangifte SVB-premies (rapport B-02) per run.
+- FR024: Produceer de maandelijkse aangifte loonbelasting (rapport B-01) en de aangifte SVB-premies (rapport B-02) per run, met bedragen in hele XCG — decimalen worden weggelaten (afgekapt), niet afgerond.
 - FR025: Produceer het sluitende loonjournaalpost-overzicht (rapport B-05) per run.
 
 **Beveiliging en toegang**
@@ -71,6 +71,10 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 - FR028: Een loonrun laat een medewerker voor een periode **automatisch** weg wanneer (a) hij geen gewerkte uren in die periode heeft, of (b) hij niet langer in dienst is (contract beëindigd op of vóór de periode). Dit is automatisch — nooit een handmatige stap; weggelaten medewerkers krijgen geen loonstrook en komen niet voor in de runtotalen of de journaalpost.
 - FR029: Elk arbeidscontract heeft een verplichte begindatum en een optionele einddatum; het invoeren van een einddatum bepaalt wanneer de medewerker uit dienst gaat. De run gebruikt deze datums om te bepalen of een medewerker in de periode in dienst is (zie FR028). Vaste contracten zonder einddatum zijn toegestaan.
+
+**Loonstrookdistributie**
+
+- FR030: Distribueer loonstroken naar medewerkers als een afzonderlijke, expliciete actie die beperkt is tot de meest senior bestaande rol, de Salarisbeheerder (`group_l10n_cw_payroll_manager`), alleen toegestaan na het afsluiten van de run en een expliciete bevestiging "geen restore nodig". Het afsluiten van een run distribueert niet. Het verzendkanaal (e-mail / Medewerkersportaal / app) is uitgesteld (OQ-01).
 
 ### Niet-functionele eisen
 
@@ -85,7 +89,7 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 ### Aanvullende eisen
 
-**Uit de Architecture Spine (invarianten AD-1…AD-15) — deze gelden voor elke berekenings-story:**
+**Uit de Architecture Spine (invarianten AD-1…AD-16) — deze gelden voor elke berekenings-story:**
 
 - AR001: **Geen starter-template.** Dit is een nieuwe (greenfield) Odoo-module; de eerste epic zet de module-steiger op volgens Technisch Ontwerp §13 (manifest, packagelay-out en de laaggrenzen, AD-11).
 - AR002: **Tekenconventie (AD-1)** — werknemersinhoudingen en -premies zijn negatief; werkgeverskosten en basisbedragen zijn positief.
@@ -96,10 +100,11 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 - AR007: **Aan/uit-gate en never-gate-set (AD-6)** — zet de gedeelde basisregels nooit uit: de BVZ-grondslag (`BVZ_PREM_INC`), de AOV-grondslag (`AOV_PREM_INC`), de belastinggrondslag (`TAX_INC`), de ruwe belasting (`LOONBEL_RAW`), netto (`NET`) en werkgeverskosten (`TOTAL_ER_COST`).
 - AR008: **Zichtbaar versus meegeteld in de berekening (AD-7)** — een audit-vrijstelling houdt de regel zichtbaar maar buiten de berekening (zichtbaarheidsvlag aan, berekeningsvlag uit: `active=True, enabled=False`).
 - AR009: **Drielaagse ontkoppeling (AD-8)** — een set toepassen is een eenmalige kopie; de gekoppelde regel op een Tier 3-loonregel (`salary_rule_id`) is alleen-lezen na aanmaak.
-- AR010: **Eén vastlegpunt (AD-9)** — alleen de run-afsluitactie (`action_close()`) wijzigt de jaar-tot-datum-totalen en het journaal; de totalen worden herberekend (niet blind opgeteld) zodat opnieuw openen en afsluiten correct blijft, en opnieuw openen draait de journaalpost (`account.move`) terug.
+- AR010: **Eén vastlegpunt (AD-9)** — alleen de run-afsluitactie (`action_close()`) wijzigt de jaar-tot-datum-totalen en het journaal; de totalen worden herberekend (niet blind opgeteld) zodat opnieuw openen en afsluiten correct blijft, en opnieuw openen draait de journaalpost (`account.move`) terug. De gecontroleerde reopen is de enige in-app reopen; een volledige database-restore is alleen voor noodgevallen en valt buiten de module (een handmatige Odoo.sh-backup vóór afsluiten is de operationele veiligheidsstap).
 - AR011: **Sluitend per constructie (AD-10)** — de grootboeknummers zijn indicatief, per bedrijf toegewezen bij onboarding.
-- AR012: **Geld en afronding (AD-12)** — valuta XCG; afronden op 2 decimalen; de belastingberekenmethode (`compute_tax`) geeft de ruwe belasting vóór toeslagen.
+- AR012: **Geld en afronding (AD-12)** — valuta XCG; afronden op 2 decimalen; de belastingberekenmethode (`compute_tax`) geeft de ruwe belasting vóór toeslagen. Aangiftes tonen hele XCG (decimalen weggelaten), terwijl loonstroken en het journaal de werkelijke bedragen met 2 decimalen behouden.
 - AR013: **Standaardkortingen gelden altijd (AD-13)** — de verwervingskosten (41.67/mnd) en de basiskorting (2 915/jr) gelden automatisch voor elke medewerker in v1.0R.
+- AR019: **Senior-only distributiegate (AD-16)** — loonstrookdistributie is een afzonderlijke actie die beperkt is tot de meest senior bestaande rol, de Salarisbeheerder-groep (`group_l10n_cw_payroll_manager`); er wordt geen nieuwe groep toegevoegd; alleen toegestaan na afsluiten plus een bevestiging "geen restore nodig"; het verzendkanaal is uitgesteld (OQ-01).
 
 **Manifest en seed-data (Technisch Ontwerp §13):**
 
@@ -110,7 +115,7 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 **Opgeloste / uitgestelde openstaande vragen:**
 
 - AR017 (**OPGELOST — bevestigd door de product owner**): AD-14 — overuren zijn opgenomen in de premiegrondslag. Bevestigd door onderzoek (~90% van de gevallen vereist het; aangenomen voor allen). Premiegrondslagen komen uit de basis- en toeslagencategorieën (`categories.BASIC + categories.ALW`). Niet langer blokkerend; AD-14 is nu aangenomen in de spine.
-- AR018 (uitgesteld, niet-blokkerend): OQ-01 distributie loonstrook; OQ-03 bevestig de standaard overurentarieven (150/150/200/200); OQ-04 fijnmazige rechten per rol; OQ-05 definitieve grootboeknummers; OQ-07 het SVB-gevarenklassemodel (tijdelijk gewoon getalveld → toekomstige dropdown-koppeling, Many2one). Buiten scope voor v1.0R: uurloon uit gewerkte uren (v1.0R gebruikt het vaste maandloon; medewerkers zonder gewerkte uren worden automatisch weggelaten, FR028); extra loonperiodes, ZV-ziekengeld, leningen/loonbeslag, de jaarlijkse verzamelloonstaat / jaaropgaaf-CSV, elektronische aangifte, DGA-loon en Aruba/Sint Maarten.
+- AR018 (uitgesteld, niet-blokkerend): OQ-01 distributie loonstrook; OQ-03 bevestig de standaard overurentarieven (150/150/200/200); OQ-04 fijnmazige rechten per rol; OQ-05 definitieve grootboeknummers; OQ-07 het SVB-gevarenklassemodel (tijdelijk gewoon getalveld → toekomstige dropdown-koppeling, Many2one). Buiten scope voor v1.0R: een custom payroll-snapshot/restore op applicatieniveau (v1.1R+; v1.0R steunt op de gecontroleerde reopen (AD-9), de concept-batch als checkpoint, een handmatige Odoo.sh-backup vóór afsluiten, en Odoo.sh Staging voor testen); uurloon uit gewerkte uren (v1.0R gebruikt het vaste maandloon; medewerkers zonder gewerkte uren worden automatisch weggelaten, FR028); extra loonperiodes, ZV-ziekengeld, leningen/loonbeslag, de jaarlijkse verzamelloonstaat / jaaropgaaf-CSV, elektronische aangifte, DGA-loon en Aruba/Sint Maarten.
 
 ### UX-ontwerpeisen
 

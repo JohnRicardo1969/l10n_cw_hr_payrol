@@ -52,12 +52,12 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 
 - FR020: Drive the run through its stages (Draft → To Check → Closed / CONCEPT → TE CONTROLEREN → AFGESLOTEN) and each payslip through its stages (Draft → To Check → Confirmed / CONCEPT → TE CONTROLEREN → BEVESTIGD, with cancel), allowing recalculation (herberekening) before close.
 - FR021: On close, confirm and lock the payslips, recompute the year-to-date totals, post the journal entry, and make the run reports available — this close is the one and only point where results are committed.
-- FR022: On close, generate a balanced journal entry (the accounting move, `account.move`) where total debit equals total credit by construction, using the configurable general-ledger mapping.
+- FR022: On close, generate a balanced journal entry (the accounting move, `account.move`) where total debit equals total credit by construction, using the configurable general-ledger mapping and the actual calculated amounts (2 decimals).
 
 **Reports**
 
 - FR023: Produce the payslip PDF (report A-01) in Curaçao layout.
-- FR024: Produce the monthly wage-tax return (report B-01) and the SVB premium return (report B-02) per run.
+- FR024: Produce the monthly wage-tax return (report B-01) and the SVB premium return (report B-02) per run, with amounts shown in whole XCG — decimals are dropped (truncated), not rounded.
 - FR025: Produce the balanced payroll journal-entry summary (report B-05) per run.
 
 **Security and access**
@@ -69,6 +69,10 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 
 - FR028: A payroll run **automatically** leaves an employee out for a period when (a) they have no worked hours in that period, or (b) they are no longer in service (their contract ended on or before the period). This is automatic — never a manual step; left-out employees get no payslip and do not appear in the run totals or the journal entry.
 - FR029: Each employment contract has a required start date and an optional end date; entering an end date sets when the employee leaves service. The run uses these dates to decide whether an employee is in service for the period (see FR028). Permanent contracts with no end date are allowed.
+
+**Payslip distribution**
+
+- FR030: Distribute payslips to employees as a separate, explicit action restricted to the most senior existing role, the Payroll Manager (`group_l10n_cw_payroll_manager`), allowed only after run close and an explicit "no restore needed" confirmation. Closing a run does not distribute. The send channel (email / Employee Portal / app) is deferred (OQ-01).
 
 ### NonFunctional Requirements
 
@@ -83,7 +87,7 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 
 ### Additional Requirements
 
-**From the Architecture Spine (invariants AD-1…AD-15) — these govern every calculation story:**
+**From the Architecture Spine (invariants AD-1…AD-16) — these govern every calculation story:**
 
 - AR001: **No starter template.** This is a fresh (greenfield) Odoo module; the first epic sets up the module skeleton per Tech Design §13 (manifest, package layout, and the layer boundaries, AD-11).
 - AR002: **Sign convention (AD-1)** — employee deductions and premiums are negative; employer costs and base amounts are positive.
@@ -94,10 +98,11 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 - AR007: **Enable/disable gate and never-gate set (AD-6)** — never disable the shared base rules: the BVZ base (`BVZ_PREM_INC`), the AOV base (`AOV_PREM_INC`), the tax base (`TAX_INC`), the raw tax (`LOONBEL_RAW`), net (`NET`), and employer cost (`TOTAL_ER_COST`).
 - AR008: **Visible vs. counted in the calculation (AD-7)** — an audit exemption keeps the line visible but out of the calculation (visibility flag on, calculation flag off: `active=True, enabled=False`).
 - AR009: **Three-tier decoupling (AD-8)** — applying a set is a one-time copy; the linked rule on a Tier 3 wage line (`salary_rule_id`) is read-only after creation.
-- AR010: **One commit point (AD-9)** — only the run-close action (`action_close()`) changes the year-to-date totals and the journal; the totals are recomputed (not blindly added to) so reopening and re-closing stays correct, and reopening reverses the journal entry (`account.move`).
+- AR010: **One commit point (AD-9)** — only the run-close action (`action_close()`) changes the year-to-date totals and the journal; the totals are recomputed (not blindly added to) so reopening and re-closing stays correct, and reopening reverses the journal entry (`account.move`). The controlled reopen is the only in-app reopen; a whole-database restore is disaster-only and outside the module (a pre-close manual Odoo.sh backup is the operational safety step before close).
 - AR011: **Balanced by construction (AD-10)** — the general-ledger account numbers are indicative, mapped per company at onboarding.
-- AR012: **Money and rounding (AD-12)** — currency XCG; round to 2 decimals; the tax-calculation method (`compute_tax`) returns the raw tax before tax credits (toeslagen).
+- AR012: **Money and rounding (AD-12)** — currency XCG; round to 2 decimals; the tax-calculation method (`compute_tax`) returns the raw tax before tax credits (toeslagen). Tax returns show whole XCG (decimals dropped), while payslips and the journal keep the actual 2-decimal amounts.
 - AR013: **Standard credits always apply (AD-13)** — the acquisition-cost allowance (verwervingskosten, 41.67/month) and the standard tax credit (basiskorting, 2 915/year) apply automatically to every employee in v1.0R.
+- AR019: **Senior-only distribution gate (AD-16)** — payslip distribution is a separate action restricted to the most senior existing role, the Payroll Manager group (`group_l10n_cw_payroll_manager`); no new group is added; allowed only after close plus a "no restore needed" confirmation; the send channel is deferred (OQ-01).
 
 **Manifest and seed data (Tech Design §13):**
 
@@ -108,7 +113,7 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 **Resolved / deferred open questions:**
 
 - AR017 (**RESOLVED — confirmed by product owner**): AD-14 — overtime **is** included in the premium base. Confirmed by research (~90% of cases require it; adopted for all). Premium bases come from the basic and allowance categories (`categories.BASIC + categories.ALW`). No longer blocking; AD-14 is now adopted in the spine.
-- AR018 (deferred, non-blocking): OQ-01 payslip distribution; OQ-03 confirm the overtime default rates (150/150/200/200); OQ-04 fine-grained rights per role; OQ-05 final general-ledger account numbers; OQ-07 the SVB risk-class model (interim plain number field → future dropdown link, Many2one). Out of scope for v1.0R: hourly gross from worked hours (v1.0R uses the fixed monthly wage; employees with no worked hours are left out automatically, FR028); extra pay periods, ZV sick pay, loans/garnishments, the annual collective wage statement / wage-tax card CSV (verzamelloonstaat / jaaropgaaf), electronic filing, DGA payroll, and Aruba/Sint Maarten.
+- AR018 (deferred, non-blocking): OQ-01 payslip distribution; OQ-03 confirm the overtime default rates (150/150/200/200); OQ-04 fine-grained rights per role; OQ-05 final general-ledger account numbers; OQ-07 the SVB risk-class model (interim plain number field → future dropdown link, Many2one). Out of scope for v1.0R: a custom application-level payroll snapshot/restore (v1.1R+; v1.0R relies on the controlled reopen (AD-9), the draft batch as checkpoint, a pre-close manual Odoo.sh backup, and Odoo.sh Staging for testing); hourly gross from worked hours (v1.0R uses the fixed monthly wage; employees with no worked hours are left out automatically, FR028); extra pay periods, ZV sick pay, loans/garnishments, the annual collective wage statement / wage-tax card CSV (verzamelloonstaat / jaaropgaaf), electronic filing, DGA payroll, and Aruba/Sint Maarten.
 
 ### UX Design Requirements
 

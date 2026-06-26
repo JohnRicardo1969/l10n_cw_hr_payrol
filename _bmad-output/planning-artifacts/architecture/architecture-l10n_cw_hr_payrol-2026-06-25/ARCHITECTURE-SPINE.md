@@ -154,6 +154,15 @@ flowchart TD
   matter how many times the run is closed. `last_updated`/`last_payslip_id` record the most recent
   close. Reopening a run **reverses** its posted `account.move`. **Prevents:** double-counted YTD and
   duplicate journal postings on reopen → re-close.
+- **Reopen is the controlled in-app path — not a database restore.** The controlled reopen above
+  (reverse journal + recompute) is the **only** reopen mechanism the module provides. A whole-database
+  restore is **outside the application's responsibility**: Odoo.sh offers only whole-DB backup/restore
+  (no partial restore), which would roll back every user's unrelated work, so it is a coordinated,
+  disaster-only operational measure — never the routine reopen. A **pre-close manual Odoo.sh backup** is
+  the recommended operational safety step before close (an Odoo.sh dashboard action, not a module
+  feature); destructive source-data mutations are otherwise tested in an Odoo.sh **Staging** branch, not
+  on production. A custom application-level payroll snapshot/restore is **out of scope for v1.0R** (see
+  Deferred).
 
 ### AD-10 — Accounting balance by construction `[ADOPTED]`
 - **Binds:** the journal posted at close.
@@ -170,11 +179,17 @@ flowchart TD
   only — they never compute a statutory amount. Localization never imports Application or Reports.
 
 ### AD-12 — Money & rounding discipline `[ADOPTED]`
-- **Binds:** tax/premium rule outputs and `compute_tax`.
-- **Prevents:** accumulated rounding drift; toeslagen mis-modeled as taxable-income reductions.
+- **Binds:** tax/premium rule outputs, `compute_tax`, the journal, and the declaration reports.
+- **Prevents:** accumulated rounding drift; toeslagen mis-modeled as taxable-income reductions; a
+  declaration showing decimals, or the journal being truncated to whole units.
 - **Rule:** currency is XCG; `compute_tax` returns `round(x, 2)`; acceptance tolerance is XCG 0.02
   (rounding only). `compute_tax` returns **raw** loonbelasting **before** toeslagen; toeslagen are then
   applied as **monetary deductions from the tax amount** (not income reductions), floored at 0.
+- **Presentation rounding (declarations vs journal):** the calculation engine, payslips, and the
+  journal (`account.move`) keep the **actual 2-decimal amounts**. **Tax returns / declarations (B-01,
+  B-02) present whole XCG** — decimals are **dropped (truncated), not rounded**. This is a Reports-layer
+  presentation rule (AD-11) applied to already-computed amounts; it never alters the engine or journal
+  values.
 
 ### AD-13 — Statutory defaults applied unconditionally `[ASSUMPTION]`
 - **Binds:** verwervingskosten forfeit and basiskorting.
@@ -206,6 +221,17 @@ flowchart TD
   are CSS variables with light (`:root`) and dark (`.o_dark_mode`) modes. (Reference only, not a
   dependency: the `cw_theme` module.) Theming is presentation — it computes no statutory amount (AD-11).
 
+### AD-16 — Senior-only payslip-distribution gate `[ADOPTED]`
+- **Binds:** the payslip-distribution action on `hr.payslip.run` and the security groups.
+- **Prevents:** payslips reaching employees before the run is final and verified — e.g. distribution
+  while a reopen/correction is still possible, or by a non-senior user.
+- **Rule:** distribution is a **separate, explicit action**, restricted to the **most senior existing
+  role — the Payroll Manager group (`group_l10n_cw_payroll_manager`)**; no new group is added. It is
+  allowed **only after** the run is closed (AD-9) **and** an explicit "no restore needed" confirmation.
+  Closing a run does **not** distribute; distribution is a deliberate second step. The distribution
+  **channel** (email / Employee Portal / app) is deferred (OQ-01) — this AD fixes only the *gate*, not
+  the medium.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -214,7 +240,7 @@ flowchart TD
 | Statutory data | All rates/ceilings/thresholds as dated `hr.tax.bracket` records (AD-5); append-only (AD-5); selected by `valid_from ≤ date ≤ valid_to`-or-open. |
 | Money & rounding | XCG; round to 2 dp at rule output; deductions negative (AD-1); annualise to apply ceilings (AD-4). |
 | State & mutation | Run/payslip state via Odoo states; YTD + journal mutated only in `action_close()` (AD-9); rules are pure functions of the payslip context (no side effects, no cross-record writes). |
-| Audit & access | All custom models inherit `mail.thread`; four security groups enforce least privilege; employee record rule restricts payslips to `employee_id.user_id = user`. |
+| Audit & access | All custom models inherit `mail.thread`; four security groups enforce least privilege (Employee, Payroll User, Payroll Manager, Accountant); the most senior — Payroll Manager — also gates distribution (AD-16); employee record rule restricts payslips to `employee_id.user_id = user`. |
 | Disable semantics | `active` = visibility+calc; `enabled` = calc-only (AD-7); never gate the never-gate set (AD-6). |
 
 ## Stack
@@ -290,9 +316,10 @@ l10n_cw_hr_payroll/
 
 | Deferred | Reason it can wait |
 | --- | --- |
-| OQ-01 Payslip distribution (portal / app / email + language) | Onboarding config; no effect on the calculation spine. |
+| OQ-01 Payslip distribution **channel** (portal / app / email + language) | Onboarding config; no effect on the calculation spine. The distribution *gate* (senior-only, post-close) is fixed now in AD-16; only the medium is deferred. |
 | OQ-03 Overtime default rates (150/150/200/200) | Indicative; confirm against labour regs before v1.0R sign-off. Rates are `parameter_value` data, not structural. |
-| OQ-04 Granular per-group rights | Detailed-design refinement within the four-group model. |
+| OQ-04 Granular per-group rights | Detailed-design refinement within the four-group model (the senior Payroll Manager also gates distribution, AD-16). |
+| Custom application-level payroll snapshot / restore | v1.1R+. Odoo.sh has no partial restore; a payroll-only snapshot spans employee/contract/work-entry/input/wage-line with FK + since-snapshot reconciliation (high correctness risk). v1.0R relies on AD-9 controlled reopen, the draft batch as checkpoint, a pre-close manual Odoo.sh backup, and Staging for testing. |
 | OQ-05 Final GL account numbers | Per-company mapping at onboarding (v1.1R); AD-10 holds regardless of the numbers. |
 | OQ-07 SVB gevarenklasse model | Interim `l10n_cw_ov_percentage` Float on contract; future Many2one `l10n_cw.svb.industry` (localization layer) once the official list is sourced. |
 | Pay periods beyond monthly; ZV sick pay; loans/garnishments; verzamelloonstaat & jaaropgaaf CSV; e-filing; DGA; Aruba/SXM | Out of scope for v1.0R per PRD roadmap (v1.1R+). Same paradigm; period-specific divisors/tables. |
