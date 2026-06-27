@@ -27,7 +27,7 @@ This PRD describes the requirements for the initial production release (v1.0R), 
 
 No formally structured, statutory-compliant payroll localization for Curaçao exists on the Odoo platform. Organizations on Curaçao running Odoo must either process payroll outside Odoo and manually reconcile journal entries, or use generic Odoo salary rules that do not implement Curaçao-specific premium structures, sliding scales, tax brackets, or statutory deduction sequences.
 
-Both approaches carry material risk. Manual processing is error-prone and labour-intensive, and reconciling externally calculated payroll back into the Odoo general ledger introduces a class of posting errors that are difficult to audit. Generic salary rules silently produce incorrect statutory amounts — for example, omitting the AVBZ low-income threshold of XCG 29,897.44 (a common defect in commercial payroll packages that causes low earners to overpay), or treating toeslagen as income reductions rather than as monetary deductions from the computed tax.
+Both approaches carry material risk. Manual processing is error-prone and labour-intensive, and reconciling externally calculated payroll back into the Odoo general ledger introduces a class of posting errors that are difficult to audit. Generic salary rules silently produce incorrect statutory amounts — for example, applying the wrong instrument for loonbelasting withholding, mishandling the above-ceiling AOV surcharge, using a stale basiskorting, or treating toeslagen as income reductions rather than as monetary deductions from the computed tax.
 
 The module eliminates this gap by implementing the complete Curaçao statutory payroll framework inside Odoo, with all logic, rates, and rules derived from the official publications of the Belastingdienst Curaçao and the SVB.
 
@@ -37,7 +37,7 @@ The module eliminates this gap by implementing the complete Curaçao statutory p
 
 The module is built to satisfy five primary goals.
 
-**Statutory correctness.** Payroll calculations are correct under the current Landsverordening for loonbelasting and all SVB premiums, including sliding scales, ceilings, low-income thresholds, and the above-ceiling AOV surcharge.
+**Statutory correctness.** Payroll calculations are correct under the current Landsverordening for loonbelasting and all SVB premiums, including the flat premium rates, ceilings, and the above-ceiling AOV surcharge, all sourced from the official Belastingdienst and SVB publications.
 
 **Auditability.** Every calculation step is traceable. Intermediate values are materialized as salary rules, rates are stored as inspectable data records, and all custom models carry a chatter audit trail.
 
@@ -199,12 +199,12 @@ The complete v1.0R sequence (Cessantia excluded — see Authoring Assumptions) i
 | 14 | OVT_PH | Step 1 | Public holiday overtime (configurable rate, default 200%) | Yes |
 | 20 | BVZ_PREM_INC | Step 2 | BVZ premium income base (after deductions) | No |
 | 30 | BVZ_ER | Step 3 | BVZ employer 9.3% | Yes |
-| 40 | BVZ_EMP | Step 4 | BVZ employee sliding scale 0%–4.3% | Yes |
+| 40 | BVZ_EMP | Step 4 | BVZ employee flat 4.3% (up to ceiling) | Yes |
 | 50 | AOV_PREM_INC | Step 5 | AOV/AWW/AVBZ premium income base | No |
 | 60 | AOV_AWW_EMP | Step 6 | AOV/AWW employee 6.5% (up to ceiling) | Yes |
 | 61 | AOV_AWW_ER | Step 6 | AOV/AWW employer 9.5% (up to ceiling) | Yes |
 | 62 | AOV_AWW_1PCT | Step 6 | AOV employee surcharge 1% above ceiling | Yes |
-| 70 | AVBZ_EMP | Step 7 | AVBZ employee 0.5% or 1.5% (sliding) | Yes |
+| 70 | AVBZ_EMP | Step 7 | AVBZ employee flat 1.5% (up to ceiling) | Yes |
 | 71 | AVBZ_ER | Step 7 | AVBZ employer 0.5% | Yes |
 | 80 | TAX_INC | Step 8 | Fiscal wage base for loonbelasting | No |
 | 90 | LOONBEL_RAW | Step 9 | Raw loonbelasting from lb-maandtabel | No |
@@ -230,7 +230,7 @@ The BVZ base is total loon less the verwervingskosten forfeit (XCG 41.67/month) 
 
 ### Steps 3–4 — BVZ Employer and Employee (Seq 30, 40)
 
-The employer pays a flat 9.3% of the capped BVZ base. The employee pays on a sliding scale designed to protect low earners: 0% below XCG 12,000/year, graduating through intermediate bands to the full 4.3% above XCG 18,000/year. The employee amount is returned as a negative (deduction) value.
+The employer pays a flat 9.3% and the employee a flat 4.3% of the BVZ base, capped at the BVZ ceiling (XCG 150,000/year). Per the official SVB-Tabel-2026 there is no income-graduated employee scale (the earlier "sliding 0%–4.3%" is dropped, AD-5/AD-22). The employee amount is returned as a negative (deduction) value; rates and ceiling are read from the per-year `hr.svb.parameters` record.
 
 ### Step 5 — AOV/AWW/AVBZ Premium Income Base (Seq 50)
 
@@ -242,15 +242,15 @@ AOV and AWW are modeled as one combined premium. The employee pays 6.5% (AOV 6% 
 
 ### Step 7 — AVBZ (Seq 70, 71)
 
-AVBZ uses the AOV base capped at the AVBZ ceiling of XCG 606,247.08/year. The employee rate is sliding: 0.5% if annual AOV income is below XCG 29,897.44, otherwise 1.5%. The employer rate is a flat 0.5%. Applying the low-income threshold correctly is a deliberate point of difference from many commercial packages that omit it.
+AVBZ uses the AOV base capped at the AVBZ ceiling of XCG 606,247.08/year. Per the official SVB-Tabel-2026 the employee rate is a **flat 1.5%** and the employer rate a flat 0.5% — there is no low-income threshold (the earlier "0.5%/1.5% at XCG 29,897.44" is dropped, AD-5/AD-22; 29,897.44 was in fact the prior-year basiskorting breakpoint). Rates and ceiling are read from the per-year `hr.svb.parameters` record.
 
 ### Steps 8–10 — Loonbelasting (Seq 80, 90, 100)
 
-`TAX_INC` is the fiscal wage: the AOV base less the absolute AOV/AWW employee premium. `LOONBEL_RAW` looks up the raw loonbelasting directly from the official Belastingdienst lb-maandtabel (`hr.loonbelasting.tabel`) for the `TAX_INC` value and the payslip period-end date — no annualisation (the table is already period-specific). For wages above the table ceiling (XCG 16,670/month) the above-ceiling extension applies: `ceiling_tax + (TAX_INC − ceiling) × 46.5%` (MR 144 § Algemeen). `LOONBEL` then applies the toeslagen as monetary deductions from the raw tax amount — not as reductions to taxable income — flooring the result at zero and returning it as a negative (deduction) value. The basiskorting (XCG 2,915/year) applies automatically to all employees; the remaining toeslagen are stored as annual amounts on employee fields and divided by 12.
+`TAX_INC` is the fiscal wage: the AOV base less the absolute AOV/AWW employee premium. `LOONBEL_RAW` looks up the raw loonbelasting directly from the official Belastingdienst lb-maandtabel (`hr.loonbelasting.tabel`) for the `TAX_INC` value and the payslip period-end date — no annualisation (the table is already period-specific). For wages above the table ceiling (XCG 16,670/month) the above-ceiling extension applies: `ceiling_tax + (TAX_INC − ceiling) × 46.5%` (MR 144 § Algemeen). `LOONBEL` then applies the toeslagen as monetary deductions from the raw tax amount — not as reductions to taxable income — flooring the result at zero and returning it as a negative (deduction) value. Because the maandtabel is exclusief basiskorting, the basiskorting (XCG 3,247.35/year — official 2026; 2,915 was the prior-year value) is a required separate deduction applied here automatically to all employees; the remaining toeslagen are stored as annual amounts on employee fields and divided by 12.
 
 ### Step 11 — Extra Tax on Bijzondere Beloningen (Seq 110)
 
-When a bijzondere beloning is present, a marginal rate is selected from a separate rate table based on the employee's annual total loon, and applied only to the bijzondere beloning amount. This is distinct from the regular loonbelasting brackets. The rule returns zero when there is no bijzondere beloning.
+When a bijzondere beloning is present (vakantiegeld, bonus, gratificatie, incidentele overuren), a single marginal rate is selected from the separate bijzondere-beloningen table (exclusief basiskorting, 6 bands) by the employee's **jaarloon** — by default the prior-year jaarloon, with a manager override to the current-year jaarloon when unrepresentative — and applied only to the bijzondere beloning amount. The tarief is fixed once per tax year, stored per (employee, year) as the carry-forward default, and the applied rate is recorded on the payslip line (AD-21). The earning stays in `ALW` (SVB premiums apply) but is excluded from `TAX_INC`. The rule returns zero when there is no bijzondere beloning. Whether overtime is incidenteel (this table) or regulier (the maandtabel) is a manual payroll-manager choice.
 
 ### Step 12 — ZV and OV (Seq 120, 121)
 
@@ -369,10 +369,10 @@ Dated rate storage supporting all rate types via a single model.
 | `rate` | Float | Rate as a percentage |
 | `valid_from` | Date | Effective date (mandatory) |
 | `valid_to` | Date | Expiry date (empty = still active) |
-| `tax_type` | Selection | `bijzondere_beloning` / `bvz_emp` / `bvz_er` / `avbz_emp` / `avbz_er` / `aov_aww_emp` / `aov_aww_er` / `aov_aww_surcharge` / `zv` / `ov` |
+| `tax_type` | Selection | `bijzondere_beloning` / `basiskorting` / `verwervingskosten` / toeslag types |
 | `active` | Boolean | Active flag |
 
-The `compute_tax(income, tax_type, date)` method selects active brackets valid on the given date, accumulates progressive tax band by band, and returns the rounded amount. It serves SVB premiums and bijzondere beloningen only. Loonbelasting is not computed via `compute_tax`; it is looked up via `hr.loonbelasting.tabel.lookup_loonbelasting` (see AD-20).
+`hr.tax.bracket` holds the bijzondere-beloningen rates and the Belastingdienst scalars (basiskorting, verwervingskosten, toeslagen) only. **SVB premiums and ceilings are not here** — they moved to the per-year `hr.svb.parameters` record (AD-22), so each shared ceiling is stored exactly once. `bijzondere_beloning` is read via `lookup_marginal_rate` (single band rate at the jaarloon; AD-21); the dated scalars via `compute_tax(tax_type, date)` (its surviving role). Loonbelasting uses `hr.loonbelasting.tabel.lookup_loonbelasting` (AD-20). All three stores are dated and append-only.
 
 # Tax and Rate Management
 
@@ -384,7 +384,7 @@ The lookup method: `wage_from = floor(TAX_INC / 5.00) * 5.00`; read the correspo
 
 **Versioning and correction handling:** The `hr.loonbelasting.tabel` header model carries fields `name`, `period_type`, `year` (Integer), `valid_from`, `valid_to`, and `active`. Multiple versions of the same (period_type, year) are supported — the Belastingdienst occasionally publishes a corrected table mid-year. The selection rule picks the active record with the latest `valid_from ≤ payslip.date_to`; ties (same `valid_from`) are broken by `id desc` (most recently uploaded). A retroactive correction (same `valid_from` as the original) is automatically preferred for herberekening of all prior payslips in that year. A prospective correction (later `valid_from`) applies only to payslips from that date onward.
 
-Example: TAX_INC = XCG 3,245.00 → lookup wage_from = 3,245 → loonbelasting = XCG 316.88 raw.
+The 2026 maandtabel is published **exclusief basiskorting** (it taxes from the first gulden), so the basiskorting is subtracted separately afterward (it is not already in the table). Example: TAX_INC = XCG 3,245.00 → lookup wage_from = 3,245 → loonbelasting = XCG 316.39 raw. Above-ceiling example: wage 20,000 → 4,862.91 + 46.5% × (20,000 − 16,670) = XCG 6,411.36.
 
 ## 2026 Toeslagen
 
@@ -392,7 +392,7 @@ Applied as monetary deductions from the computed tax, not as income reductions. 
 
 | Toeslag | Annual Amount (XCG) | Source |
 |---|---|---|
-| Basiskorting | 2,915 | Automatic — all employees |
+| Basiskorting | 3,247.35 | Automatic — all employees (official 2026; 2,915 was prior-year) |
 | Alleenverdienerstoeslag | 1,779 | `l10n_cw_only_earner_deduction` |
 | Kindertoeslag — 1st child | 948 | `l10n_cw_child_deduction` (cumulative) |
 | Kindertoeslag — 2nd child | 475 | Added to above |
@@ -403,15 +403,16 @@ Applied as monetary deductions from the computed tax, not as income reductions. 
 
 ## 2026 Bijzondere Beloningen Rate Table
 
-The exclusief basiskorting variant is used (basiskorting applied once, post-calculation, across both regular and bijzondere tax). The marginal rate is chosen by annual total loon and applied only to the bijzondere beloning.
+The exclusief basiskorting variant is used (basiskorting applied once via the maandtabel, so it is not applied again here). The marginal rate is chosen by the employee's **jaarloon** — by default the prior-year jaarloon, with a manager override to the current-year jaarloon when unrepresentative (AD-21) — and applied only to the bijzondere beloning. **Six bands** (the official 2026 PDF; v3.0D earlier listed five, omitting the 30% band):
 
-| Annual Total Loon (XCG) | Rate |
+| Jaarloon (XCG) | Rate |
 |---|---|
-| ≤ 43,500 | 9.75% |
-| ≤ 58,000 | 15.00% |
-| ≤ 86,900 | 23.00% |
-| ≤ 123,100 | 37.50% |
-| ≤ 181,000 | 46.50% |
+| 0 – 43,500 | 9.75% |
+| 43,500 – 58,000 | 15.00% |
+| 58,000 – 86,900 | 23.00% |
+| 86,900 – 123,100 | 30.00% |
+| 123,100 – 181,000 | 37.50% |
+| > 181,000 | 46.50% |
 
 ## 2026 SVB Premium Rates
 
@@ -419,13 +420,12 @@ The exclusief basiskorting variant is used (basiskorting applied once, post-calc
 |---|---|---|---|
 | AOV/AWW (combined) | 6.5% | 9.5% | 100,000 |
 | AOV above ceiling (employee only) | 1.0% | — | No ceiling |
-| AVBZ | 0.5% or 1.5%* | 0.5% | 606,247.08 |
-| BVZ | Sliding 0%–4.3%** | 9.3% | 150,000 |
-| ZV | — | 1.9% | 85,753.20 |
-| OV | — | 0.5%–5.0% (by gevarenklasse) | 85,753.20 (shared with ZV) |
+| AVBZ | 1.5% | 0.5% | 606,247.08 |
+| BVZ | 4.3% | 9.3% | 150,000 |
+| ZV | — | 1.9% | 85,753.20 (monthly cap 7,146.10) |
+| OV | — | 0.5%–5.0% (by gevarenklasse) | 85,753.20 (shared with ZV; monthly cap 7,146.10) |
 
-\* AVBZ employee 0.5% if annual AOV income < XCG 29,897.44; otherwise 1.5%.
-\*\* BVZ employee 0% below XCG 12,000/year, graduating to full 4.3% above XCG 18,000/year.
+Per the official SVB-Tabel-2026, AVBZ and BVZ employee shares are **flat** (no income-graduated scale); the earlier "AVBZ 0.5%/1.5% at 29,897.44" and "BVZ sliding 0%–4.3% (12,000/18,000)" do not exist and are dropped (AD-5/AD-22). The ZV/OV loongrens is a **monthly** cap (XCG 7,146.10) applied directly — no annualisation. All SVB rates and ceilings live in the per-year `hr.svb.parameters` record (AD-22).
 
 ## Rate Update Procedure
 
