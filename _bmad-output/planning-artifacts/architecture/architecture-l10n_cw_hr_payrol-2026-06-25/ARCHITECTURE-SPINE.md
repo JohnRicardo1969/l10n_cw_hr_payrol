@@ -232,6 +232,34 @@ flowchart TD
   **channel** (email / Employee Portal / app) is deferred (OQ-01) — this AD fixes only the *gate*, not
   the medium.
 
+### AD-17 — Canonical effective date for dated lookups `[ADOPTED]`
+- **Binds:** every dated-rate / bracket lookup and every `compute_tax` call in the calculation.
+- **Prevents:** rules within one payslip reading rates from different effective dates; a historical
+  recompute silently using *today's* rates (the v3.0D `compute_tax` defaults to `today()`).
+- **Rule:** all dated lookups use **one canonical effective date — the payslip's period-end date**
+  (`payslip.date_to`), passed explicitly to `compute_tax` and to bracket searches. In payroll context
+  `compute_tax` must **not** fall back to `today()`. Recomputing a historical payslip therefore
+  reproduces the rates in force for its period (consistent with AD-5's append-only dated records).
+
+### AD-18 — Fail loud on missing statutory data `[ADOPTED]`
+- **Binds:** `compute_tax` and any required dated-rate lookup.
+- **Prevents:** a missing rate/bracket silently yielding 0 → wrong, zero statutory tax/premium.
+- **Rule:** if a **required** statutory rate, bracket, or scale is absent for the effective date, raise
+  a **blocking error** (`UserError`, naming the `tax_type` and date) — **never return 0**. This is
+  distinct from AD-6: a *disabled* premium deliberately returns 0; *missing statutory data* is a defect
+  that must stop the run, not pass silently.
+
+### AD-19 — Company scoping (multi-company-safe) `[ADOPTED]`
+- **Binds:** every model's company scope and its record rules.
+- **Prevents:** national rates being duplicated or diverging per company; operational payroll data
+  leaking across companies.
+- **Rule:** **National statutory data is global/shared** — `hr.tax.bracket`, the CW salary rules and
+  categories, and the `CWMONTHLY`/`CWSTAFF` structures carry no `company_id` (one Curaçao ruleset for
+  all CW companies). **Operational data is company-scoped** via `company_id` with multi-company record
+  rules — `hr.wage.component.set`(+line), `hr.employee.wage.line`, `hr.wage.component.ytd`, payslips /
+  runs, and the journal. This holds whether an install is single- or multi-company; actual
+  multi-company *enablement* remains an open question (kept cheap and safe by this scoping either way).
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -242,6 +270,9 @@ flowchart TD
 | State & mutation | Run/payslip state via Odoo states; YTD + journal mutated only in `action_close()` (AD-9); rules are pure functions of the payslip context (no side effects, no cross-record writes). |
 | Audit & access | All custom models inherit `mail.thread`; four security groups enforce least privilege (Employee, Payroll User, Payroll Manager, Accountant); the most senior — Payroll Manager — also gates distribution (AD-16); employee record rule restricts payslips to `employee_id.user_id = user`. |
 | Disable semantics | `active` = visibility+calc; `enabled` = calc-only (AD-7); never gate the never-gate set (AD-6). |
+| Effective date & missing data | All dated lookups use the payslip period-end date (AD-17); a missing required rate hard-errors, never 0 (AD-18). |
+| Schema migration | Schema changes (e.g. the AD-5 `tax_type` expansion) ship Odoo migration scripts that preserve historical payslips and closed YTD; never destructively drop or rewrite historical statutory records (append-only, AD-5). |
+| Company scope | National statutory data global; operational data company-scoped via `company_id` (AD-19). |
 
 ## Stack
 

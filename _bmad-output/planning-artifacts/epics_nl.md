@@ -89,7 +89,7 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 ### Aanvullende eisen
 
-**Uit de Architecture Spine (invarianten AD-1…AD-16) — deze gelden voor elke berekenings-story:**
+**Uit de Architecture Spine (invarianten AD-1…AD-19) — deze gelden voor elke berekenings-story:**
 
 - AR001: **Geen starter-template.** Dit is een nieuwe (greenfield) Odoo-module; de eerste epic zet de module-steiger op volgens Technisch Ontwerp §13 (manifest, packagelay-out en de laaggrenzen, AD-11).
 - AR002: **Tekenconventie (AD-1)** — werknemersinhoudingen en -premies zijn negatief; werkgeverskosten en basisbedragen zijn positief.
@@ -105,6 +105,10 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 - AR012: **Geld en afronding (AD-12)** — valuta XCG; afronden op 2 decimalen; de belastingberekenmethode (`compute_tax`) geeft de ruwe belasting vóór toeslagen. Aangiftes tonen hele XCG (decimalen weggelaten), terwijl loonstroken en het journaal de werkelijke bedragen met 2 decimalen behouden.
 - AR013: **Standaardkortingen gelden altijd (AD-13)** — de verwervingskosten (41.67/mnd) en de basiskorting (2 915/jr) gelden automatisch voor elke medewerker in v1.0R.
 - AR019: **Senior-only distributiegate (AD-16)** — loonstrookdistributie is een afzonderlijke actie die beperkt is tot de meest senior bestaande rol, de Salarisbeheerder-groep (`group_l10n_cw_payroll_manager`); er wordt geen nieuwe groep toegevoegd; alleen toegestaan na afsluiten plus een bevestiging "geen restore nodig"; het verzendkanaal is uitgesteld (OQ-01).
+- AR020: **Canonieke peildatum (AD-17)** — elke gedateerde-tariefopzoeking en de belastingmethode (`compute_tax`) gebruikt de einddatum van de loonstrookperiode (`payslip.date_to`), nooit `today()`; zo reproduceert een historische herberekening de tarieven van die periode.
+- AR021: **Hard falen bij ontbrekende tarieven (AD-18)** — een vereist wettelijk tarief dat voor de peildatum ontbreekt geeft een blokkerende fout (`UserError`), nooit een stille 0 (anders dan een bewust uitgezette premie).
+- AR022: **Bedrijfsscoping (AD-19)** — nationale wettelijke data (het Belastingschijf-model, salarisregels, categorieën, structuren) is globaal; operationele data (looncomponentsets/-regels, jaar-tot-datum, loonstroken/runs, journaal) is bedrijfsgebonden via `company_id`. Multi-company-activering is een openstaande vraag.
+- AR023: **Schema-migratiediscipline** — schemawijzigingen (bijv. de `tax_type`-uitbreiding in AR006) leveren migratiescripts die historische loonstroken en afgesloten jaar-tot-datum behouden; verwijder of herschrijf nooit destructief historische wettelijke records.
 
 **Manifest en seed-data (Technisch Ontwerp §13):**
 

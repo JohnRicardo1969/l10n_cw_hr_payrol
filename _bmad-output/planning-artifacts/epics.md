@@ -87,7 +87,7 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 
 ### Additional Requirements
 
-**From the Architecture Spine (invariants AD-1…AD-16) — these govern every calculation story:**
+**From the Architecture Spine (invariants AD-1…AD-19) — these govern every calculation story:**
 
 - AR001: **No starter template.** This is a fresh (greenfield) Odoo module; the first epic sets up the module skeleton per Tech Design §13 (manifest, package layout, and the layer boundaries, AD-11).
 - AR002: **Sign convention (AD-1)** — employee deductions and premiums are negative; employer costs and base amounts are positive.
@@ -103,6 +103,10 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 - AR012: **Money and rounding (AD-12)** — currency XCG; round to 2 decimals; the tax-calculation method (`compute_tax`) returns the raw tax before tax credits (toeslagen). Tax returns show whole XCG (decimals dropped), while payslips and the journal keep the actual 2-decimal amounts.
 - AR013: **Standard credits always apply (AD-13)** — the acquisition-cost allowance (verwervingskosten, 41.67/month) and the standard tax credit (basiskorting, 2 915/year) apply automatically to every employee in v1.0R.
 - AR019: **Senior-only distribution gate (AD-16)** — payslip distribution is a separate action restricted to the most senior existing role, the Payroll Manager group (`group_l10n_cw_payroll_manager`); no new group is added; allowed only after close plus a "no restore needed" confirmation; the send channel is deferred (OQ-01).
+- AR020: **Canonical effective date (AD-17)** — every dated-rate lookup and the tax method (`compute_tax`) uses the payslip period-end date (`payslip.date_to`), never `today()`; so a historical recompute reproduces that period's rates.
+- AR021: **Fail loud on missing rates (AD-18)** — a required statutory rate missing for the effective date raises a blocking error (`UserError`), never a silent 0 (unlike a deliberately disabled premium).
+- AR022: **Company scoping (AD-19)** — national statutory data (the Tax Bracket model, salary rules, categories, structures) is global; operational data (wage sets/lines, year-to-date, payslips/runs, journal) is company-scoped via `company_id`. Multi-company enablement is an open question.
+- AR023: **Schema-migration discipline** — schema changes (e.g. the `tax_type` expansion in AR006) ship migration scripts that preserve historical payslips and closed year-to-date; never destructively drop historical statutory records.
 
 **Manifest and seed data (Tech Design §13):**
 
