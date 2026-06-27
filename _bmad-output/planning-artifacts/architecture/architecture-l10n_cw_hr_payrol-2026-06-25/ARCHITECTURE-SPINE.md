@@ -7,7 +7,7 @@ paradigm: 'Odoo l10n_*_hr_payroll localization module + dated-data-driven sequen
 scope: 'v1.0R monthly Curaçao payroll: statutory salary-rule calculation pipeline, three-tier wage component model, dated-rate storage, run lifecycle/state commit, accounting posting, layer boundaries'
 status: final
 created: '2026-06-25'
-updated: '2026-06-26'
+updated: '2026-06-27'
 binds: []
 sources:
   - 'docs/tech_design_l10n_cw_hr_payroll_v3.0D.txt'
@@ -34,7 +34,7 @@ records and read at runtime. Three layers map to directories:
 
 | Layer | Owns | Directories |
 | --- | --- | --- |
-| Localization | Statutory definitions + dated data | `models/hr_salary_rule.py`, `models/hr_tax_bracket.py`, `models/hr_contract.py`, `models/hr_employee.py`, `data/`, salary-rule Python |
+| Localization | Statutory definitions + dated data | `models/hr_salary_rule.py`, `models/hr_tax_bracket.py`, `models/hr_loonbelasting_tabel.py`, `models/hr_contract.py`, `models/hr_employee.py`, `data/`, salary-rule Python |
 | Application | Config + workflow + UI + security | `models/hr_wage_component_set.py`, `models/hr_employee_wage_line.py`, `models/hr_wage_component_ytd.py`, `wizard/`, `views/`, `security/` |
 | Reports | Read-only rendering | `report/` |
 
@@ -80,28 +80,35 @@ flowchart TD
 - **Prevents:** one author applying an annual ceiling directly to a monthly figure.
 - **Rule:** periodic (monthly) base × 12 → apply the annual ceiling/scale/bracket → ÷ 12 back to
   periodic.
+- **Exception — loonbelasting:** the `lb-*tabel` is already period-specific (monthly table → monthly
+  result directly). LOONBEL_RAW (Seq 90) calls `lookup_loonbelasting` with the raw monthly `TAX_INC`
+  and receives a monthly tax amount — no × 12 / ÷ 12. AD-4 applies only to SVB premium ceilings and
+  thresholds. See AD-20.
 
 ### AD-5 — Dated-rate authority `[ADOPTED]` (resolves the rates fork)
 - **Binds:** **all** statutory rates and ceilings — including the SVB premiums (AOV/AWW, AVBZ, BVZ, ZV,
-  OV), the verwervingskosten forfeit, and the toeslagen — not only loonbelasting and bijzondere
-  beloningen.
+  OV), the verwervingskosten forfeit, and the toeslagen.
 - **Prevents:** a rate change requiring a code deploy (the PRD regulatory-agility goal); two rules
   holding divergent copies of the same rate.
-- **Rule:** statutory values live in `hr.tax.bracket` as **dated** records (its `tax_type` already
-  enumerates `aov_aww / avbz / bvz / zv_ov`) and are read at runtime via `compute_tax()` / dated
-  lookups. **No statutory rate, ceiling, or threshold is a literal in rule Python.** Records are
-  **append-only**: never deleted; superseded by setting `valid_to` and inserting a new `valid_from`.
+- **Rule:** statutory values live in `hr.tax.bracket` as **dated** records and are read at runtime via
+  `compute_tax()` / dated lookups. **No statutory rate, ceiling, or threshold is a literal in rule
+  Python.** Records are **append-only**: never deleted; superseded by setting `valid_to` and inserting
+  a new `valid_from`.
 - **`tax_type` is the sole discriminator.** `hr.tax.bracket` carries only `tax_type`,
   `income_from`/`income_to`, `rate`, `valid_from`/`valid_to` — no payer/role field, and
   `compute_tax(income, tax_type, date)` takes no payer argument. The v3.0D `tax_type` enumeration is
   therefore **too coarse**: `bvz`, `avbz`, `aov_aww`, and `zv_ov` each conflate several distinct rates
   (employee vs employer vs surcharge; ZV vs OV) with no way to select one. **Seed change:** `tax_type`
-  is expanded to one value per (insurance, payer/role) — `loonbelasting`, `bijzondere_beloning`,
-  `bvz_emp`, `bvz_er`, `avbz_emp`, `avbz_er`, `aov_aww_emp`, `aov_aww_er`, `aov_aww_surcharge`, `zv`,
-  `ov` — so a single `tax_type` uniquely identifies one rate/scale. No payer argument is added.
+  is expanded to one value per (insurance, payer/role) — `bijzondere_beloning`, `bvz_emp`, `bvz_er`,
+  `avbz_emp`, `avbz_er`, `aov_aww_emp`, `aov_aww_er`, `aov_aww_surcharge`, `zv`, `ov` — so a single
+  `tax_type` uniquely identifies one rate/scale. No payer argument is added.
+- **Exception — loonbelasting is NOT in `hr.tax.bracket`.** Loonbelasting uses the official
+  `lb-*tabel` published annually by Belastingdienst Curaçao (Ministerial Regulation), stored in the
+  separate `hr.loonbelasting.tabel` model. The Schijventarief (inkomstenbelasting bracket table) is not
+  the loonbelasting instrument and must not be used for withholding. See AD-20.
 - **Read/representation contract (per `tax_type`)** — so two authors encode and read identically:
-  - *Progressive* (`loonbelasting`, `bijzondere_beloning`): one ordered set of band records;
-    `compute_tax` accumulates band-by-band and returns the tax (`income_to = 0` = top band uncapped).
+  - *Progressive* (`bijzondere_beloning`): one ordered set of band records; `compute_tax` accumulates
+    band-by-band and returns the tax (`income_to = 0` = top band uncapped).
   - *Flat with ceiling* (`bvz_er`, `avbz_er`, `aov_aww_er`, `zv`, `ov`): one dated record whose `rate`
     is the flat percentage and whose `income_to` is the annual ceiling (`0` = none). The rule caps the
     annualised base at `income_to`, applies `rate`, de-annualises (AD-4).
@@ -179,12 +186,14 @@ flowchart TD
   only — they never compute a statutory amount. Localization never imports Application or Reports.
 
 ### AD-12 — Money & rounding discipline `[ADOPTED]`
-- **Binds:** tax/premium rule outputs, `compute_tax`, the journal, and the declaration reports.
+- **Binds:** tax/premium rule outputs, `compute_tax`, `lookup_loonbelasting`, the journal, and the
+  declaration reports.
 - **Prevents:** accumulated rounding drift; toeslagen mis-modeled as taxable-income reductions; a
   declaration showing decimals, or the journal being truncated to whole units.
-- **Rule:** currency is XCG; `compute_tax` returns `round(x, 2)`; acceptance tolerance is XCG 0.02
-  (rounding only). `compute_tax` returns **raw** loonbelasting **before** toeslagen; toeslagen are then
-  applied as **monetary deductions from the tax amount** (not income reductions), floored at 0.
+- **Rule:** currency is XCG; `compute_tax` and `lookup_loonbelasting` both return `round(x, 2)`;
+  acceptance tolerance is XCG 0.02 (rounding only). `lookup_loonbelasting` returns the **raw**
+  loonbelasting from the table **before** toeslagen; toeslagen are then applied as **monetary
+  deductions from the tax amount** (not income reductions), floored at 0.
 - **Presentation rounding (declarations vs journal):** the calculation engine, payslips, and the
   journal (`account.move`) keep the **actual 2-decimal amounts**. **Tax returns / declarations (B-01,
   B-02) present whole XCG** — decimals are **dropped (truncated), not rounded**. This is a Reports-layer
@@ -233,39 +242,87 @@ flowchart TD
   the medium.
 
 ### AD-17 — Canonical effective date for dated lookups `[ADOPTED]`
-- **Binds:** every dated-rate / bracket lookup and every `compute_tax` call in the calculation.
+- **Binds:** every dated-rate / bracket lookup, every `compute_tax` call, and every
+  `lookup_loonbelasting` call in the calculation.
 - **Prevents:** rules within one payslip reading rates from different effective dates; a historical
   recompute silently using *today's* rates (the v3.0D `compute_tax` defaults to `today()`).
 - **Rule:** all dated lookups use **one canonical effective date — the payslip's period-end date**
-  (`payslip.date_to`), passed explicitly to `compute_tax` and to bracket searches. In payroll context
-  `compute_tax` must **not** fall back to `today()`. Recomputing a historical payslip therefore
-  reproduces the rates in force for its period (consistent with AD-5's append-only dated records).
+  (`payslip.date_to`), passed explicitly to `compute_tax`, `lookup_loonbelasting`, and bracket
+  searches. Neither method may fall back to `today()` in payroll context. Recomputing a historical
+  payslip therefore reproduces the table and rates in force for its period (consistent with AD-5's and
+  AD-20's append-only dated records).
 
 ### AD-18 — Fail loud on missing statutory data `[ADOPTED]`
-- **Binds:** `compute_tax` and any required dated-rate lookup.
-- **Prevents:** a missing rate/bracket silently yielding 0 → wrong, zero statutory tax/premium.
-- **Rule:** if a **required** statutory rate, bracket, or scale is absent for the effective date, raise
-  a **blocking error** (`UserError`, naming the `tax_type` and date) — **never return 0**. This is
-  distinct from AD-6: a *disabled* premium deliberately returns 0; *missing statutory data* is a defect
-  that must stop the run, not pass silently.
+- **Binds:** `compute_tax`, `lookup_loonbelasting`, and any required dated-rate lookup.
+- **Prevents:** a missing rate/bracket/table silently yielding 0 → wrong, zero statutory tax/premium.
+- **Rule:** if a **required** statutory rate, bracket, scale, or loonbelasting table entry is absent
+  for the effective date, raise a **blocking error** (`UserError`, naming the `tax_type` or
+  `period_type` and date) — **never return 0**. This is distinct from AD-6: a *disabled* premium
+  deliberately returns 0; *missing statutory data* is a defect that must stop the run, not pass
+  silently.
 
 ### AD-19 — Company scoping (multi-company-safe) `[ADOPTED]`
 - **Binds:** every model's company scope and its record rules.
 - **Prevents:** national rates being duplicated or diverging per company; operational payroll data
   leaking across companies.
-- **Rule:** **National statutory data is global/shared** — `hr.tax.bracket`, the CW salary rules and
-  categories, and the `CWMONTHLY`/`CWSTAFF` structures carry no `company_id` (one Curaçao ruleset for
-  all CW companies). **Operational data is company-scoped** via `company_id` with multi-company record
-  rules — `hr.wage.component.set`(+line), `hr.employee.wage.line`, `hr.wage.component.ytd`, payslips /
-  runs, and the journal. This holds whether an install is single- or multi-company; actual
-  multi-company *enablement* remains an open question (kept cheap and safe by this scoping either way).
+- **Rule:** **National statutory data is global/shared** — `hr.tax.bracket`, `hr.loonbelasting.tabel`
+  (+ `.lijn`), the CW salary rules and categories, and the `CWMONTHLY`/`CWSTAFF` structures carry no
+  `company_id` (one Curaçao ruleset for all CW companies). **Operational data is company-scoped** via
+  `company_id` with multi-company record rules — `hr.wage.component.set`(+line),
+  `hr.employee.wage.line`, `hr.wage.component.ytd`, payslips / runs, and the journal. This holds
+  whether an install is single- or multi-company; actual multi-company *enablement* remains an open
+  question (kept cheap and safe by this scoping either way).
+
+### AD-20 — Loonbelasting table model `[ADOPTED]` (2026-06-27)
+- **Binds:** LOONBEL_RAW (Seq 90) and any future period-specific payroll rule.
+- **Prevents:** using the Schijventarief (the annual *inkomstenbelasting* bracket table) as the
+  loonbelasting withholding instrument — which is conceptually wrong; employers must use the published
+  `lb-*tabel`. Also prevents annualizing a period-specific table.
+- **Background:** Loonbelasting is a periodic *withholding* on wages only (a prepayment of
+  inkomstenbelasting). Its statutory instrument is the `lb-*tabel` series published annually by the
+  Minister of Financiën via Ministeriële Regeling (source: MR 144, 2024). The Schijventarief is the
+  annual inkomstenbelasting table filed by taxpayers; it is not the employer's withholding instrument.
+- **Rule:**
+  - Loonbelasting is looked up in `hr.loonbelasting.tabel` (header) / `hr.loonbelasting.tabel.lijn`
+    (rows): one row per `(tabel_id, wage_from)` where `wage_from` are the exact wage points in the
+    published table.
+  - **Header fields:** `name` (e.g. "Maandtabel 2026", "Maandtabel 2026 Correctie 1"),
+    `period_type`, `year` (Integer, e.g. 2026), `valid_from`, `valid_to` (nullable), `active`.
+  - **Selection rule:** `lookup_loonbelasting(wage, period_type, date)` searches for
+    `active=True` headers where `period_type` matches, `year = date.year`,
+    `valid_from ≤ date`, and `valid_to` is null or `≥ date`, ordered by
+    **`valid_from desc, id desc`, limit 1**. This means: among all versions valid on the
+    payslip date, the one with the latest effective date wins; ties (same `valid_from`,
+    e.g. a retroactive correction uploaded later) are broken by the most recently uploaded
+    record (`id desc`). No mandatory archiving step — the ordering selects automatically.
+  - **Correction handling:** when the Belastingdienst publishes a corrected table for the
+    same year, upload it as a new header with the same or a later `valid_from`.
+    - Retroactive correction (`valid_from = year-start`): the new record wins for *all*
+      payslips in that year (highest `id`); herberekening on prior-period payslips
+      automatically uses the corrected table.
+    - Prospective correction (`valid_from = correction-effective-date`): payslips with
+      `date_to` before that date continue using the earlier version.
+  - **Lookup key:** `wage_from = floor(TAX_INC / step) * step`, where `step` is the table's
+    publication step for the `period_type` (maand: 5.00; week: 5.00; dag: 2.50; halvedag: 1.25;
+    quincena: TBC; kwartaal: TBC).
+  - **Above-ceiling (statutory, MR 144 § Algemeen):** if `TAX_INC > max(wage_from)` for the
+    selected table: `loonbelasting = ceiling_tax + (TAX_INC − ceiling_wage) × 0.465`.
+  - **Missing table → `UserError`** (AD-18) — never return 0.
+  - **No annualization** — the table is period-specific; the monthly result is used directly (AD-4
+    exception).
+  - **Effective date:** `payslip.date_to` (AD-17).
+  - **Global scope:** no `company_id` — one national table for all CW companies (AD-19).
+  - **Append-only:** table rows are never deleted; superseded headers are retained for audit
+    (may be archived with `active=False` once a replacement is active).
+  - **v1.0R seeds the `maand` table only.** Other period types (`week`, `dag`, `halvedag`,
+    `quincena`, `kwartaal`) are deferred to v1.1R when those pay periods are supported.
 
 ## Consistency Conventions
 
 | Concern | Convention |
 | --- | --- |
 | Naming | Custom fields on standard models prefixed `l10n_cw_`; new models `hr.<thing>` (e.g. `hr.tax.bracket`); rule codes UPPER_SNAKE (`AOV_AWW_EMP`); component-set technical codes UPPER_SNAKE and immutable (`STD_OFFICE`). |
-| Statutory data | All rates/ceilings/thresholds as dated `hr.tax.bracket` records (AD-5); append-only (AD-5); selected by `valid_from ≤ date ≤ valid_to`-or-open. |
+| Statutory data | SVB premium rates/ceilings/thresholds and bijzondere beloningen rates as dated `hr.tax.bracket` records (AD-5); loonbelasting as versioned `hr.loonbelasting.tabel` entries (AD-20), selected by `valid_from desc, id desc` among active records valid on `payslip.date_to` — the latest effective version wins, corrections handled by upload order. All records append-only. |
 | Money & rounding | XCG; round to 2 dp at rule output; deductions negative (AD-1); annualise to apply ceilings (AD-4). |
 | State & mutation | Run/payslip state via Odoo states; YTD + journal mutated only in `action_close()` (AD-9); rules are pure functions of the payslip context (no side effects, no cross-record writes). |
 | Audit & access | All custom models inherit `mail.thread`; four security groups enforce least privilege (Employee, Payroll User, Payroll Manager, Accountant); the most senior — Payroll Manager — also gates distribution (AD-16); employee record rule restricts payslips to `employee_id.user_id = user`. |
@@ -299,6 +356,8 @@ erDiagram
     hr_employee_wage_line ||--o{ hr_wage_component_ytd : accumulates
     hr_payslip ||--o{ hr_wage_component_ytd : "last updated by"
     hr_tax_bracket }o--|| hr_salary_rule : "read via compute_tax()"
+    hr_loonbelasting_tabel ||--o{ hr_loonbelasting_tabel_lijn : contains
+    hr_loonbelasting_tabel }o--|| hr_salary_rule : "read via lookup_loonbelasting()"
 ```
 
 Run/payslip lifecycle (commit point is AD-9):
@@ -318,10 +377,12 @@ Minimal source tree (full tree in tech design §13):
 
 ```text
 l10n_cw_hr_payroll/
-  models/    # Localization (rule ext, tax bracket, contract/employee ext) + Application models
-  data/      # CWMONTHLY/CWSTAFF, categories, salary rules, 2026 dated rates
+  models/    # Localization (rule ext, tax bracket, loonbelasting tabel, contract/employee ext)
+             # + Application models
+  data/      # CWMONTHLY/CWSTAFF, categories, salary rules, 2026 dated rates,
+             # 2026 lb-maandtabel (~3,335 rows CSV)
   wizard/    # T2 -> T3 apply wizard
-  views/     # forms, menus
+  views/     # forms, menus (incl. hr_loonbelasting_tabel_views.xml)
   report/    # QWeb payslip + declarations (read-only)
   security/  # groups, record rules, ir.model.access.csv
   static/    # src/scss/cw_theme_prl10n.scss — scoped backend theme (assets bundle, AD-15)
@@ -333,7 +394,8 @@ l10n_cw_hr_payroll/
 | Capability / Area (PRD) | Lives in | Governed by |
 | --- | --- | --- |
 | Statutory calculation engine (Sequence 10–150) | Localization — salary-rule Python | AD-1, AD-2, AD-3, AD-4, AD-6, AD-12, AD-14 |
-| Rate management / regulatory agility | Localization — `hr.tax.bracket` | AD-5 |
+| SVB premium rate management / regulatory agility | Localization — `hr.tax.bracket` | AD-5 |
+| Loonbelasting table lookup + annual upload | Localization — `hr.loonbelasting.tabel` | AD-20 |
 | Three-tier wage component model | Application — sets, wage lines, wizard | AD-7, AD-8 |
 | Per-employee enable/disable exemptions | Application — `hr.employee.wage.line` | AD-6, AD-7 |
 | YTD accumulation | Application — `hr.wage.component.ytd` | AD-9 |
