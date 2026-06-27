@@ -34,7 +34,9 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 - FR005: Bereken de BVZ-zorgpremie — werkgever vast 9,3% en werknemer glijdend 0%–4,3% — over de jaarlijks afgetopte BVZ-grondslag.
 - FR006: Bereken de AOV/AWW-premie (ouderdom en nabestaanden) — werknemer 6,5% en werkgever 9,5% tot het plafond — plus een werknemerstoeslag van 1% over inkomen boven het plafond.
 - FR007: Bereken de AVBZ-premie (langdurige zorg) — werknemer glijdend 0,5%/1,5% op basis van de lage-inkomensgrens, werkgever vast 0,5% — over de AOV-grondslag afgetopt op het AVBZ-plafond.
-- FR008: Bereken de loonbelasting via de belastingberekenmethode (`compute_tax`) met de progressieve schijventabel, die de ruwe belasting teruggeeft; trek vervolgens de toeslagen af als geld van het belastingbedrag (niet van het belastbaar inkomen), met een ondergrens van nul.
+- FR008: Bereken de loonbelasting door het bruto maandtarief op te zoeken in de officiële Belastingdienst lb-maandtabel (`hr.loonbelasting.tabel`) voor de fiscale loongrondslag (`TAX_INC`) en de einddatum van de loonstrookperiode; tel 46,5% op over eventueel bedrag boven het tabelplafond (MR 144 § Algemeen). Het ruwe tabelresultaat is het LOONBEL_RAW-bedrag (Seq 90). Trek daarna de toeslagen (basiskorting + medewerkersspecifieke kortingen) als geld van het ruwe belastingbedrag af — niet van het belastbaar inkomen — met een ondergrens van nul (Seq 100, LOONBEL).
+
+  Voorbeeld: TAX_INC = XCG 3.245,00/mnd → zoek op wage_from = 3.245 in de lb-maandtabel 2026 → loonbelasting = XCG 316,88 (ruw); basiskorting = XCG 2.915/12 = XCG 242,92; LOONBEL = −(316,88 − 242,92) = −XCG 73,96.
 - FR009: Pas de basiskorting automatisch toe op elke medewerker; pas de alleenverdieners-, kinder- en ouderentoeslag toe vanuit velden op de medewerker.
 - FR010: Bereken de extra belasting op bijzondere beloningen met de eigen marginale-tarieftabel (de variant "exclusief basiskorting"), alleen toegepast op het bedrag van de bijzondere beloning.
 - FR011: Bereken de ZV-premie (ziekte, werkgever 1,9%) en de OV-premie (ongevallen, werkgever, variabel per gevarenklasse) over het gedeelde ZV/OV-loonplafond, op basis van het contractbasisloon (exclusief loon in natura).
@@ -46,7 +48,7 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 - FR015: Lever het drielaags looncomponentmodel — Tier 1 globale regels (het Salarisregel-model, `hr.salary.rule`), Tier 2 bedrijfssjabloonsets (het Looncomponentset-model, `hr.wage.component.set`, met zijn regels) en Tier 3 loonregels per medewerker (het Medewerker-loonregel-model, `hr.employee.wage.line`).
 - FR016: Pas een Tier 2-sjabloonset toe op één of meer medewerkers via de toepaswizard, waarbij onafhankelijke Tier 3-loonregels worden aangemaakt die niet meewijzigen als de set later wordt bewerkt.
-- FR017: Sla elk wettelijk tarief, plafond en grens op als gedateerde records in het Belastingschijf-model (`hr.tax.bracket`); wijzig een tarief door het oude record af te sluiten (zet de geldig-tot-datum, `valid_to`) en een nieuw gedateerd record toe te voegen — zonder code-implementatie.
+- FR017: Sla elk wettelijk tarief, plafond en grens op als gedateerde records in het Belastingschijf-model (`hr.tax.bracket`); wijzig een tarief door het oude record af te sluiten (zet de geldig-tot-datum, `valid_to`) en een nieuw gedateerd record toe te voegen — zonder code-implementatie. Loonbelasting vormt een uitzondering: het periodieke belastingbedrag wordt opgezocht in de officiële lb-*tabel (`hr.loonbelasting.tabel`), niet in schijfrecords; zie FR031 en AD-20.
 - FR018: Houd een lopend jaar-tot-datum-totaal bij per medewerker, per component, per jaar in het Jaar-tot-datum-model (`hr.wage.component.ytd`), bijgewerkt bij het afsluiten van een run en bewaard over jaren heen.
 - FR019: Lever de toeslagvelden en de beschikkingsinvoer (beschikking) op de medewerker, en een gevarenklasse-percentage (OV%) op het contract.
 
@@ -75,6 +77,7 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 **Loonstrookdistributie**
 
 - FR030: Distribueer loonstroken naar medewerkers als een afzonderlijke, expliciete actie die beperkt is tot de meest senior bestaande rol, de Salarisbeheerder (`group_l10n_cw_payroll_manager`), alleen toegestaan na het afsluiten van de run en een expliciete bevestiging "geen restore nodig". Het afsluiten van een run distribueert niet. Het verzendkanaal (e-mail / Medewerkersportaal / app) is uitgesteld (OQ-01).
+- FR031: Sta de Salarisbeheerder toe een Belastingdienst lb-maandtabel te uploaden door een CSV-bestand te importeren in `hr.loonbelasting.tabel` / `hr.loonbelasting.tabel.lijn` via de standaard Odoo-importactie. Dit dekt twee scenario's: (a) **Jaarlijkse upload** — vóór de eerste run van elk nieuw jaar de nieuwe tabel uploaden; is die nog niet beschikbaar, dan wordt de tabel van het vorige jaar (met open `valid_to`) automatisch gebruikt totdat de nieuwe tabel arriveert. (b) **Correctie gedurende het jaar** — publiceert de Belastingdienst een gecorrigeerde tabel voor het lopende jaar, dan wordt die als nieuw koptekstrecord voor hetzelfde jaar geüpload. Het systeem selecteert automatisch de juiste versie per loonstrook: de actieve tabel met `valid_from ≤ payslip.date_to`, gesorteerd op meest recente `valid_from` eerst en bij gelijke `valid_from` op de volgorde van upload (meest recentste upload wint). Herberekening van eerder afgesloten loonstroken pakt de gecorrigeerde tabel automatisch op. Vervangen tabelrecords worden bewaard voor audit.
 
 ### Niet-functionele eisen
 
@@ -89,31 +92,32 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 ### Aanvullende eisen
 
-**Uit de Architecture Spine (invarianten AD-1…AD-19) — deze gelden voor elke berekenings-story:**
+**Uit de Architecture Spine (invarianten AD-1…AD-20) — deze gelden voor elke berekenings-story:**
 
 - AR001: **Geen starter-template.** Dit is een nieuwe (greenfield) Odoo-module; de eerste epic zet de module-steiger op volgens Technisch Ontwerp §13 (manifest, packagelay-out en de laaggrenzen, AD-11).
 - AR002: **Tekenconventie (AD-1)** — werknemersinhoudingen en -premies zijn negatief; werkgeverskosten en basisbedragen zijn positief.
 - AR003: **Categorieregels (AD-2)** — netto = basis + toeslagen + inhoudingen (`BASIC + ALW + DED`, met inhoudingen negatief); werkgeverskosten staan in de werkgeverscategorie (`ER`) en blijven buiten netto; overuren gaan in toeslagen (`ALW`); onbelaste vergoedingen (`NONTAXED`) zijn een afzonderlijke regel na netto.
 - AR004: **Strikte volgorde en referentiediscipline (AD-3)** — vaste oplopende volgorde; een regel mag alleen eerdere resultaten lezen — eerdere regelbedragen (`rules.CODE.amount`) en categorietotalen (`categories.X`).
-- AR005: **Annualisatie (AD-4)** — vermenigvuldig de maandgrondslag met 12, pas het jaarplafond/-schaal/-schijf toe, deel daarna terug door 12.
-- AR006: **Tarieven zijn data (AD-5)** — elk wettelijk tarief en plafond (premies inbegrepen) staat in het Belastingschijf-model (`hr.tax.bracket`); geen tariefwaarden hardgecodeerd in rule-Python (dit overschrijft de hardgecodeerde v3.0D-listings). Vereist een seed-wijziging: splits het tarieftype-veld (`tax_type`) in specifieke waarden per verzekering en betaler (`bvz_emp`, `bvz_er`, `avbz_emp`, `avbz_er`, `aov_aww_emp`, `aov_aww_er`, `aov_aww_surcharge`, `zv`, `ov`, `loonbelasting`, `bijzondere_beloning`), elk met een gedefinieerde manier om het te lezen.
+- AR005: **Annualisatie (AD-4)** — vermenigvuldig de maandgrondslag met 12, pas het jaarplafond/-schaal/-schijf toe, deel daarna terug door 12. Uitzondering: loonbelasting is vrijgesteld van annualisatie — de lb-*tabel is al periodespecifiek (de maandtabel geeft direct een maandelijkse uitkomst). AD-4 geldt uitsluitend voor SVB-premieceilingen en -grenzen; zie AD-20.
+- AR006: **Tarieven zijn data (AD-5)** — elk wettelijk tarief en plafond (premies inbegrepen) staat in het Belastingschijf-model (`hr.tax.bracket`); geen tariefwaarden hardgecodeerd in rule-Python (dit overschrijft de hardgecodeerde v3.0D-listings). Vereist een seed-wijziging: splits het tarieftype-veld (`tax_type`) in specifieke waarden per verzekering en betaler (`bvz_emp`, `bvz_er`, `avbz_emp`, `avbz_er`, `aov_aww_emp`, `aov_aww_er`, `aov_aww_surcharge`, `zv`, `ov`, `bijzondere_beloning`), elk met een gedefinieerde manier om het te lezen. Loonbelasting staat **niet** in `hr.tax.bracket` — dat maakt gebruik van `hr.loonbelasting.tabel` (zie AR024).
 - AR007: **Aan/uit-gate en never-gate-set (AD-6)** — zet de gedeelde basisregels nooit uit: de BVZ-grondslag (`BVZ_PREM_INC`), de AOV-grondslag (`AOV_PREM_INC`), de belastinggrondslag (`TAX_INC`), de ruwe belasting (`LOONBEL_RAW`), netto (`NET`) en werkgeverskosten (`TOTAL_ER_COST`).
 - AR008: **Zichtbaar versus meegeteld in de berekening (AD-7)** — een audit-vrijstelling houdt de regel zichtbaar maar buiten de berekening (zichtbaarheidsvlag aan, berekeningsvlag uit: `active=True, enabled=False`).
 - AR009: **Drielaagse ontkoppeling (AD-8)** — een set toepassen is een eenmalige kopie; de gekoppelde regel op een Tier 3-loonregel (`salary_rule_id`) is alleen-lezen na aanmaak.
 - AR010: **Eén vastlegpunt (AD-9)** — alleen de run-afsluitactie (`action_close()`) wijzigt de jaar-tot-datum-totalen en het journaal; de totalen worden herberekend (niet blind opgeteld) zodat opnieuw openen en afsluiten correct blijft, en opnieuw openen draait de journaalpost (`account.move`) terug. De gecontroleerde reopen is de enige in-app reopen; een volledige database-restore is alleen voor noodgevallen en valt buiten de module (een handmatige Odoo.sh-backup vóór afsluiten is de operationele veiligheidsstap).
 - AR011: **Sluitend per constructie (AD-10)** — de grootboeknummers zijn indicatief, per bedrijf toegewezen bij onboarding.
-- AR012: **Geld en afronding (AD-12)** — valuta XCG; afronden op 2 decimalen; de belastingberekenmethode (`compute_tax`) geeft de ruwe belasting vóór toeslagen. Aangiftes tonen hele XCG (decimalen weggelaten), terwijl loonstroken en het journaal de werkelijke bedragen met 2 decimalen behouden.
+- AR012: **Geld en afronding (AD-12)** — valuta XCG; afronden op 2 decimalen; de belastingberekenmethode (`compute_tax`) geeft de ruwe SVB-premie of bijzondere-beloningbelasting vóór toeslagen; voor loonbelasting retourneert `lookup_loonbelasting` het bedrag direct uit de lb-*tabel (afgerond op 2 decimalen, ook boven het plafond). Aangiftes tonen hele XCG (decimalen weggelaten), terwijl loonstroken en het journaal de werkelijke bedragen met 2 decimalen behouden.
 - AR013: **Standaardkortingen gelden altijd (AD-13)** — de verwervingskosten (41.67/mnd) en de basiskorting (2 915/jr) gelden automatisch voor elke medewerker in v1.0R.
 - AR019: **Senior-only distributiegate (AD-16)** — loonstrookdistributie is een afzonderlijke actie die beperkt is tot de meest senior bestaande rol, de Salarisbeheerder-groep (`group_l10n_cw_payroll_manager`); er wordt geen nieuwe groep toegevoegd; alleen toegestaan na afsluiten plus een bevestiging "geen restore nodig"; het verzendkanaal is uitgesteld (OQ-01).
-- AR020: **Canonieke peildatum (AD-17)** — elke gedateerde-tariefopzoeking en de belastingmethode (`compute_tax`) gebruikt de einddatum van de loonstrookperiode (`payslip.date_to`), nooit `today()`; zo reproduceert een historische herberekening de tarieven van die periode.
-- AR021: **Hard falen bij ontbrekende tarieven (AD-18)** — een vereist wettelijk tarief dat voor de peildatum ontbreekt geeft een blokkerende fout (`UserError`), nooit een stille 0 (anders dan een bewust uitgezette premie).
-- AR022: **Bedrijfsscoping (AD-19)** — nationale wettelijke data (het Belastingschijf-model, salarisregels, categorieën, structuren) is globaal; operationele data (looncomponentsets/-regels, jaar-tot-datum, loonstroken/runs, journaal) is bedrijfsgebonden via `company_id`. Multi-company-activering is een openstaande vraag.
+- AR020: **Canonieke peildatum (AD-17)** — elke gedateerde-tariefopzoeking, de belastingmethode (`compute_tax`) en de loonbelastingopzoeking (`lookup_loonbelasting`) gebruiken de einddatum van de loonstrookperiode (`payslip.date_to`), nooit `today()`; zo reproduceert een historische herberekening de tarieven van die periode.
+- AR021: **Hard falen bij ontbrekende wettelijke data (AD-18)** — een vereist wettelijk tarief of loonbelastingtabel die voor de peildatum ontbreekt geeft een blokkerende fout (`UserError`), nooit een stille 0 (anders dan een bewust uitgezette premie).
+- AR022: **Bedrijfsscoping (AD-19)** — nationale wettelijke data (het Belastingschijf-model, het Loonbelastingtabel-model (`hr.loonbelasting.tabel`), salarisregels, categorieën, structuren) is globaal; operationele data (looncomponentsets/-regels, jaar-tot-datum, loonstroken/runs, journaal) is bedrijfsgebonden via `company_id`. Multi-company-activering is een openstaande vraag.
 - AR023: **Schema-migratiediscipline** — schemawijzigingen (bijv. de `tax_type`-uitbreiding in AR006) leveren migratiescripts die historische loonstroken en afgesloten jaar-tot-datum behouden; verwijder of herschrijf nooit destructief historische wettelijke records.
+- AR024: **Loonbelastingtabelmodel (AD-20)** — loonbelasting wordt opgezocht in `hr.loonbelasting.tabel` (koptekst) / `hr.loonbelasting.tabel.lijn` (rijen); één rij per `(tabel_id, wage_from)`. Koptekstvelden: `name`, `period_type`, `year` (geheel getal), `valid_from`, `valid_to` (leeg = nog actief), `active`. **Selectieregel:** onder alle `active=True`-kopteksten waarbij `period_type` overeenkomt, `year = datum.year`, en `valid_from ≤ payslip.date_to`, kies de versie met de meest recente `valid_from`; bij gelijke `valid_from` wint het record met het hoogste `id` (meest recent geüpload). Dit dekt zowel jaarlijkse uploads als correcties gedurende het jaar zonder dat de oude tabel eerst gearchiveerd hoeft te worden. Opzoeksleutel = `floor(TAX_INC / 5,00) * 5,00` (maandtabel). Boven het tabelplafond: `plafondbelasting + (TAX_INC − plafond) × 46,5%` (MR 144 § Algemeen). Ontbrekende tabel geeft een blokkerende fout (`UserError`, AD-18). Geen annualisatie (AD-4 uitzondering). Peildatum = `payslip.date_to` (AD-17). Globale scope, geen `company_id` (AD-19). Rijen worden nooit verwijderd; vervangen kopteksten bewaard voor audit.
 
 **Manifest en seed-data (Technisch Ontwerp §13):**
 
 - AR014: **Manifest** — afhankelijk van (`hr, hr_contract, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance`) zonder thema-afhankelijkheid; version `19.0.0.1.0`; country `cw`; license `OPL-1`; geen app en niet automatisch geïnstalleerd (`application=False, auto_install=False`); plus een assets-vermelding (`assets`) die het themastylesheet (`static/src/scss/cw_theme_prl10n.scss`) in de backend-bundel (`web.assets_backend`) laadt — zie UX-DR001.
-- AR015: **Seed-data** — lever het maandstructuurtype (`CWMONTHLY`), de standaard-staf-structuur (`CWSTAFF`), de salarisregelcategorieën, alle CW-salarisregels en de gedateerde tariefrecords van 2026 (loonbelastingschijven, SVB-premies en -plafonds, bijzondere-beloningstarieven, toeslagen).
+- AR015: **Seed-data** — lever het maandstructuurtype (`CWMONTHLY`), de standaard-staf-structuur (`CWSTAFF`), de salarisregelcategorieën, alle CW-salarisregels en de gedateerde tariefrecords van 2026 (SVB-premies en -plafonds, bijzondere-beloningstarieven — zes correcte schijven — en toeslagen), plus de lb-maandtabelgegevens van 2026 (≈ 3.335 rijen, `period_type = maand`, `valid_from = 2026-01-01`, via `data/hr.loonbelasting.tabel.lijn.csv`).
 - AR016: **Vertalingen** — lever het Nederlandse interfacevertaalbestand (`i18n/nl.po`).
 
 **Opgeloste / uitgestelde openstaande vragen:**
@@ -167,7 +171,9 @@ De module gebruikt de standaardschermen van Odoo (lijst-/formulier-/menuweergave
 
 ## Wettelijke en domeintermen
 
-- loonbelasting — belasting op loon.
+- loonbelasting — periodieke inhouding op loon door de werkgever (voorheffing op de inkomstenbelasting). Wordt bepaald via opzoeking in de officiële lb-*tabel, jaarlijks gepubliceerd door de Belastingdienst Curaçao via Ministeriële Regeling (MR 144). Zie ook: inkomstenbelasting.
+- inkomstenbelasting — jaarlijkse belasting op alle inkomsten (loon, bankrente, verhuurinkomsten enz.), geheven via de Schijventarief. De loonbelasting is een voorheffing hierop; de werknemer verrekent ingehouden loonbelasting bij zijn jaarlijkse aangifte inkomstenbelasting.
+- loonbelastingkaart — jaarlijks overzicht per medewerker van ingehouden loonbelasting, samengesteld vanuit de jaar-tot-datum-totalen (`hr.wage.component.ytd`); bron voor de verzamelloonstaat en de individuele aangifte (beide uitgesteld naar v1.1R, maar de YTD-data worden al opgebouwd vanaf v1.0R).
 - basiskorting — standaard belastingkorting voor elke medewerker.
 - toeslagen — belastingkortingen die van de berekende belasting worden afgetrokken (alleenverdieners-, kinder-, ouderentoeslag).
 - bijzondere beloningen — bijzondere (niet-periodieke) beloning, belast via een eigen tabel.
@@ -187,15 +193,18 @@ De module gebruikt de standaardschermen van Odoo (lijst-/formulier-/menuweergave
 - `hr.salary.rule` — Salarisregel-model (één berekeningsstap).
 - `hr.wage.component.set` — Looncomponentset-model (Tier 2-sjabloon).
 - `hr.employee.wage.line` — Medewerker-loonregel-model (Tier 3, per medewerker).
-- `hr.tax.bracket` — Belastingschijf-model (gedateerde wettelijke tarieven).
+- `hr.tax.bracket` — Belastingschijf-model (gedateerde wettelijke tarieven voor SVB-premies en bijzondere beloningen; niet voor loonbelasting).
+- `hr.loonbelasting.tabel` — Loonbelastingtabel-model, koptekst per tabelversie (velden: `name`, `period_type`, `year`, `valid_from`, `valid_to`, `active`); meerdere versies per periode + jaar zijn mogelijk voor correcties.
+- `hr.loonbelasting.tabel.lijn` — Loonbelastingtabelrij: één record per loonstap (`wage_from` → `loonbelasting`).
 - `hr.wage.component.ytd` — Jaar-tot-datum-totalenmodel.
 - `account.move` — Odoo-journaalpost.
 - `mail.thread` — Odoo-mixin die de wijzigingslog (chatter) levert.
 - Salarisregelcodes — `TOTAL_LOON` (brutoloon), `NET` (nettoloon), `NONTAXED` (onbelaste vergoedingen), `TOTAL_ER_COST` (werkgeverskosten), en de verborgen grondslagen `BVZ_PREM_INC`, `AOV_PREM_INC`, `TAX_INC`, `LOONBEL_RAW`.
 - Categorieën — `BASIC` (basisloon), `ALW` (toeslagen), `DED` (inhoudingen), `ER` (werkgeverskosten).
 - Velden en vlaggen — `appears_on_payslip` (toon op loonstrook), `enabled` (telt mee in de berekening), `active` (zichtbaar), `valid_from` / `valid_to` (geldigheidsdatums tarief), `salary_rule_id` (gekoppelde regel), `tax_type` (tarieftype), `employee_id.user_id` (eigenaarskoppeling voor de recordregel).
-- `tax_type`-waarden — `loonbelasting`, `bijzondere_beloning`, `bvz_emp`, `bvz_er`, `avbz_emp`, `avbz_er`, `aov_aww_emp`, `aov_aww_er`, `aov_aww_surcharge`, `zv`, `ov`.
-- `compute_tax` — methode die de ruwe belasting uit de schijventabel teruggeeft.
+- `tax_type`-waarden — `bijzondere_beloning`, `bvz_emp`, `bvz_er`, `avbz_emp`, `avbz_er`, `aov_aww_emp`, `aov_aww_er`, `aov_aww_surcharge`, `zv`, `ov`. Loonbelasting maakt **geen** gebruik van `hr.tax.bracket` — dat maakt gebruik van `hr.loonbelasting.tabel` (AD-20).
+- `compute_tax` — methode die de ruwe belasting uit de schijfrecords teruggeeft; gebruikt voor SVB-premies en bijzondere beloningen (niet voor loonbelasting, waarvoor `lookup_loonbelasting` op `hr.loonbelasting.tabel` wordt gebruikt).
+- `lookup_loonbelasting` — methode op `hr.loonbelasting.tabel` die het periodieke loonbelastingbedrag teruggeeft voor een gegeven loon, periodetype en peildatum. Selecteert de actieve tabelversie op `valid_from desc, id desc` (meest recente ingangsdatum, daarna meest recente upload); past de boven-plafond-regel toe indien nodig; geeft een `UserError` als geen tabel gevonden wordt.
 - `action_close()` — de run-afsluitactie; het enige vastlegpunt.
 - `CWMONTHLY` / `CWSTAFF` — het maandstructuurtype / de standaard-staf-salarisstructuur.
 - Manifestsleutels — `depends`, `version`, `country`, `license`, `application`, `auto_install`, `assets`, `data`.
