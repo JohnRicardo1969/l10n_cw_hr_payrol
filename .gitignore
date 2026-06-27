@@ -122,3 +122,6 @@ docs/_build/
 *.pdf.tmp
 ~$*.docx
 ~$*.xlsx
+
+# Temporary files
+_TEMP/
