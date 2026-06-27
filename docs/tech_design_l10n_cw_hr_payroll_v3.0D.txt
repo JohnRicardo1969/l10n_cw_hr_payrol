@@ -1196,20 +1196,21 @@ This is the periodic fiscal wage used as input to the tax table lookup.
 
 Step 9 — LOONBEL_RAW (Seq 90, hidden)
 
-    tax_inc        = rules.TAX_INC.amount
-    annual_tax_inc = tax_inc * 12   # annualise
+    tax_inc = rules.TAX_INC.amount
 
-    raw_annual_tax = env['hr.tax.bracket'].compute_tax(
-        income   = annual_tax_inc,
-        tax_type = 'loonbelasting',
-        date     = payslip.date_from
+    result = env['hr.loonbelasting.tabel'].lookup_loonbelasting(
+        wage        = tax_inc,
+        period_type = 'maand',
+        date        = payslip.date_to   # AD-17: period-end date
     )
 
-    result = raw_annual_tax / 12   # back to periodic
-
-This rule returns the raw tax amount from the table before any toeslagen
-are applied. The toeslagen are applied as monetary deductions in Step
-10.
+This rule returns the raw loonbelasting amount looked up directly from
+the official Belastingdienst lb-maandtabel (hr.loonbelasting.tabel).
+No annualisation — the table is already period-specific. Above the
+table ceiling (XCG 16,670/month) the statutory extension applies:
+ceiling_tax + (tax_inc - ceiling) * 46.5% (MR 144 § Algemeen).
+Missing table raises UserError (AD-18). The toeslagen are applied as
+monetary deductions in Step 10.
 
 Step 10 — LOONBEL (Seq 100)
 
@@ -1253,9 +1254,11 @@ Step 11 — EXTRA_TAX (Seq 110)
         elif annual_total <= 86900:
             pct = 0.23
         elif annual_total <= 123100:
+            pct = 0.30
+        elif annual_total <= 181000:
             pct = 0.375
         else:
-            pct = 0.465   # top rate (≤ 181,000 and above)
+            pct = 0.465   # top rate above 181,000
 
         result = -(extra_earn * pct)
 
@@ -1340,18 +1343,50 @@ Loonbelasting progressive brackets (applied to annual TaxIncome):
 
   : Figure : Payroll Run Lifecycle (State Machine)
 
-NOTE - bracket calculation vs. lookup table.
-Belastingdienst Curaçao publishes both a progressive bracket table
-(Schijven-tarief-2026) and a pre-calculated monthly lookup table
-(lb-maandtabel-2026, 18 pages, XCG 0–16,670). Both are valid
-implementation approaches. This module uses the bracket calculation
-method because: (1) it requires no 18-page data import; (2) it handles
-any salary level including above the table ceiling; (3) rate changes
-require only updating bracket records, not reimporting an entire lookup
-table; and (4) it is auditable — every step of the calculation is
-traceable. The monthly lookup table is labelled Exclusief basiskorting,
+NOTE - loonbelasting instrument: lb-tabel, not Schijventarief.
+The Schijventarief is the annual inkomstenbelasting bracket table,
+filed by the taxpayer on their income tax return (wages + bank interest
++ rental income etc.). Loonbelasting is a periodic employer withholding
+— a prepayment of inkomstenbelasting — and its statutory instrument is
+the lb-*tabel series published annually by Belastingdienst Curaçao via
+Ministeriële Regeling (MR 144). Employers must use the published
+lb-tabel, not re-derive it from the Schijventarief. This module
+implements the statutory lookup: wage_from = floor(TAX_INC / 5.00) *
+5.00; above ceiling (XCG 16,670/month): ceiling_tax + excess * 46.5%
+(MR 144 § Algemeen). The table is labelled Exclusief basiskorting,
 confirming that the basiskorting (XCG 2,915/year) is applied as a
-post-table monetary deduction; consistent with our design.
+post-table monetary deduction; consistent with this design. No
+annualisation — the table is already period-specific (AD-20).
+
+NOTE - versioned loonbelasting tables and correction handling.
+The hr.loonbelasting.tabel model supports multiple header records for
+the same (period_type, year) combination. This is required because
+Belastingdienst Curaçao occasionally publishes a corrected table for
+the same year after the original has already been used. Header fields:
+name (e.g. "Maandtabel 2026", "Maandtabel 2026 Correctie 1"),
+period_type, year (Integer), valid_from, valid_to (nullable), active.
+
+Selection rule in lookup_loonbelasting(wage, period_type, date):
+
+  year = date.year
+  tabel = env['hr.loonbelasting.tabel'].search([
+      ('period_type', '=', period_type),
+      ('year',        '=', year),
+      ('valid_from',  '<=', date),
+      '|', ('valid_to', '=', False), ('valid_to', '>=', date),
+      ('active',      '=', True),
+  ], order='valid_from desc, id desc', limit=1)
+
+Among all active, date-valid versions for (period_type, year), the one
+with the latest valid_from wins. Ties (same valid_from — e.g. a
+retroactive correction uploaded after the original) are broken by id
+desc: the most recently uploaded record wins. This means:
+- Retroactive correction (valid_from = 2026-01-01 for both): new upload
+  wins for ALL 2026 payslips; herberekening auto-picks the correction.
+- Prospective correction (valid_from = 2026-05-01): Jan–Apr payslips
+  continue using the original; May+ payslips use the correction.
+No mandatory archiving step — the ordering resolves it automatically.
+Superseded headers are retained for audit (append-only principle).
 
 Toeslagen 2026 (monetary deductions from computed tax amount; not income
 reductions):
@@ -1392,10 +1427,18 @@ loonbelasting):
 
   ≤ 86,900                       23.00%
 
-  ≤ 123,100                      37.50%
+  ≤ 123,100                      30.00%
 
-  ≤ 181,000                      46.50%
+  ≤ 181,000                      37.50%
+
+  > 181,000                      46.50%
   -----------------------------------------------------------------------
+
+NOTE - 6 bands, not 5. The official PDF (Tabel-bijzonder-beloningen-
+2026-exclusief-basiskorting.pdf) shows 6 rate bands. An earlier
+version of this design incorrectly showed only 5 bands, omitting the
+30% band for XCG 86,900–123,100 and misassigning 37.5% to that range.
+The seed data and the EXTRA_TAX rule must implement all 6 bands.
 
   : Listing : Enabled flag pattern
 

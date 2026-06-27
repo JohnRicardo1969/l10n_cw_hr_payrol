@@ -207,7 +207,7 @@ The complete v1.0R sequence (Cessantia excluded — see Authoring Assumptions) i
 | 70 | AVBZ_EMP | Step 7 | AVBZ employee 0.5% or 1.5% (sliding) | Yes |
 | 71 | AVBZ_ER | Step 7 | AVBZ employer 0.5% | Yes |
 | 80 | TAX_INC | Step 8 | Fiscal wage base for loonbelasting | No |
-| 90 | LOONBEL_RAW | Step 9 | Raw loonbelasting from bracket table | No |
+| 90 | LOONBEL_RAW | Step 9 | Raw loonbelasting from lb-maandtabel | No |
 | 100 | LOONBEL | Step 10 | Loonbelasting after toeslagen deduction | Yes |
 | 110 | EXTRA_TAX | Step 11 | Tax on bijzondere beloningen (separate table) | Yes |
 | 120 | ZV_ER | Step 12 | ZV employer 1.9% (up to ZV/OV ceiling) | Yes |
@@ -246,7 +246,7 @@ AVBZ uses the AOV base capped at the AVBZ ceiling of XCG 606,247.08/year. The em
 
 ### Steps 8–10 — Loonbelasting (Seq 80, 90, 100)
 
-`TAX_INC` is the fiscal wage: the AOV base less the absolute AOV/AWW employee premium. `LOONBEL_RAW` annualises the fiscal wage, looks up the progressive bracket tax via `compute_tax`, and returns the periodic raw tax. `LOONBEL` then applies the toeslagen as monetary deductions from the raw tax amount — not as reductions to taxable income — flooring the result at zero and returning it as a negative (deduction) value. The basiskorting (XCG 2,915/year) applies automatically to all employees; the remaining toeslagen are stored as annual amounts on employee fields and divided by 12.
+`TAX_INC` is the fiscal wage: the AOV base less the absolute AOV/AWW employee premium. `LOONBEL_RAW` looks up the raw loonbelasting directly from the official Belastingdienst lb-maandtabel (`hr.loonbelasting.tabel`) for the `TAX_INC` value and the payslip period-end date — no annualisation (the table is already period-specific). For wages above the table ceiling (XCG 16,670/month) the above-ceiling extension applies: `ceiling_tax + (TAX_INC − ceiling) × 46.5%` (MR 144 § Algemeen). `LOONBEL` then applies the toeslagen as monetary deductions from the raw tax amount — not as reductions to taxable income — flooring the result at zero and returning it as a negative (deduction) value. The basiskorting (XCG 2,915/year) applies automatically to all employees; the remaining toeslagen are stored as annual amounts on employee fields and divided by 12.
 
 ### Step 11 — Extra Tax on Bijzondere Beloningen (Seq 110)
 
@@ -369,25 +369,22 @@ Dated rate storage supporting all rate types via a single model.
 | `rate` | Float | Rate as a percentage |
 | `valid_from` | Date | Effective date (mandatory) |
 | `valid_to` | Date | Expiry date (empty = still active) |
-| `tax_type` | Selection | `loonbelasting` / `aov_aww` / `avbz` / `bvz` / `bijzondere_beloning` / `zv_ov` |
+| `tax_type` | Selection | `bijzondere_beloning` / `bvz_emp` / `bvz_er` / `avbz_emp` / `avbz_er` / `aov_aww_emp` / `aov_aww_er` / `aov_aww_surcharge` / `zv` / `ov` |
 | `active` | Boolean | Active flag |
 
-The `compute_tax(income, tax_type, date)` method selects active brackets valid on the given date, accumulates progressive tax band by band, and returns the rounded amount. For loonbelasting it returns the raw tax before toeslagen, which are applied afterwards as monetary deductions.
+The `compute_tax(income, tax_type, date)` method selects active brackets valid on the given date, accumulates progressive tax band by band, and returns the rounded amount. It serves SVB premiums and bijzondere beloningen only. Loonbelasting is not computed via `compute_tax`; it is looked up via `hr.loonbelasting.tabel.lookup_loonbelasting` (see AD-20).
 
 # Tax and Rate Management
 
-## 2026 Loonbelasting Brackets
+## 2026 Loonbelasting Table
 
-Applied to annual fiscal wage. Bracket calculation is used rather than the published 18-page monthly lookup table, because it handles any salary level (including above the table ceiling), needs no bulk data import, is updated by editing bracket records, and is fully auditable.
+Applied to the periodic fiscal wage (`TAX_INC`) using the official Belastingdienst Curaçao lb-maandtabel, published annually per Ministeriële Regeling. The lb-maandtabel is the statutory instrument for loonbelasting withholding (a prepayment of inkomstenbelasting). The Schijventarief (progressive bracket table) is the annual inkomstenbelasting instrument — it is not the correct instrument for employer withholding and must not be used for loonbelasting calculation.
 
-| Bracket | Income From (XCG) | Income To (XCG) | Rate |
-|---|---|---|---|
-| 1 | 0 | 39,094 | 9.75% |
-| 2 | 39,094 | 52,127 | 15.00% |
-| 3 | 52,127 | 78,190 | 23.00% |
-| 4 | 78,190 | 110,769 | 30.00% |
-| 5 | 110,769 | 162,894 | 37.50% |
-| 6 | 162,894 | No ceiling | 46.50% |
+The lookup method: `wage_from = floor(TAX_INC / 5.00) * 5.00`; read the corresponding row from `hr.loonbelasting.tabel.lijn`. Above the table ceiling (XCG 16,670/month): `ceiling_tax + (TAX_INC − 16,670) × 46.5%` (MR 144 § Algemeen). Missing table raises `UserError` (AD-18). The 2026 maandtabel has ≈ 3,335 rows and is seeded as `data/hr.loonbelasting.tabel.lijn.csv`.
+
+**Versioning and correction handling:** The `hr.loonbelasting.tabel` header model carries fields `name`, `period_type`, `year` (Integer), `valid_from`, `valid_to`, and `active`. Multiple versions of the same (period_type, year) are supported — the Belastingdienst occasionally publishes a corrected table mid-year. The selection rule picks the active record with the latest `valid_from ≤ payslip.date_to`; ties (same `valid_from`) are broken by `id desc` (most recently uploaded). A retroactive correction (same `valid_from` as the original) is automatically preferred for herberekening of all prior payslips in that year. A prospective correction (later `valid_from`) applies only to payslips from that date onward.
+
+Example: TAX_INC = XCG 3,245.00 → lookup wage_from = 3,245 → loonbelasting = XCG 316.88 raw.
 
 ## 2026 Toeslagen
 
@@ -527,7 +524,7 @@ Payroll data is personal data under the Landsverordening bescherming persoonsgeg
 
 ## Seed Data Installed with the Module
 
-The `CWMONTHLY` structure type and `CWSTAFF` structure; all salary rule categories and rules (Steps 10–150); the 2026 loonbelasting brackets; the 2026 SVB premium rates and ceilings; and the 2026 bijzondere beloningen rate records.
+The `CWMONTHLY` structure type and `CWSTAFF` structure; all salary rule categories and rules (Steps 10–150); the 2026 lb-maandtabel (≈ 3,335 rows, `hr.loonbelasting.tabel` + `.lijn`); the 2026 SVB premium rates and ceilings; and the 2026 bijzondere beloningen rate records (6 correct bands).
 
 ## Per-Organization Configuration at Onboarding
 
@@ -612,8 +609,9 @@ This PRD was derived from the Technical Design Document v3.0D and three architec
 | Figure 1 | Module Dependency Architecture — `figure-01-module-dependency-architecture.drawio.png` |
 | Figure 2 | Three-Tier Wage Component Model — `figure-02-three-tier-wage-component-model.drawio.png` |
 | Figure 3 | Payroll Run Lifecycle — `figure-03-payroll-run-lifecycle.drawio.png` |
-| Belastingdienst Curaçao — Schijventarief 2026 | Official loonbelasting bracket table |
-| Belastingdienst Curaçao — lb-maandtabel 2026 | Pre-calculated monthly lookup table (reference only — not used) |
+| Belastingdienst Curaçao — lb-maandtabel 2026 | Official loonbelasting withholding table (statutory instrument for employer withholding) |
+| Belastingdienst Curaçao — MR 144 (Ministeriële Regeling loonbelastingtabellen 2025) | Statutory basis for lb-tabel lookup method and above-ceiling formula |
+| Belastingdienst Curaçao — Schijventarief 2026 | Annual inkomstenbelasting bracket table (reference only — not used for employer withholding) |
 | SVB Curaçao — Official rates publication 2026 | Source for AOV/AWW, AVBZ, BVZ, ZV, OV rates and ceilings |
 | Landsverordening bescherming persoonsgegevens (A.B. 2010 no. 84) | Data protection compliance basis |
 | Cessantialandsverordening | Basis for permanent Cessantia exclusion |
