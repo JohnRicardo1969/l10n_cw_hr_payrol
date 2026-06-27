@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture Spine — Validation Report</title>
+<style>
+  :root {
+    --c-bg: #f8f9fa; --c-card: #ffffff; --c-border: #dee2e6;
+    --c-critical: #dc3545; --c-critical-bg: #fff5f5;
+    --c-high: #fd7e14; --c-high-bg: #fff8f0;
+    --c-medium: #ffc107; --c-medium-bg: #fffdf0;
+    --c-low: #6c757d; --c-low-bg: #f8f9fa;
+    --c-pass: #198754; --c-pass-bg: #f0fff4;
+    --c-fail: #dc3545;
+    --c-text: #212529; --c-muted: #6c757d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--c-bg); color: var(--c-text); line-height: 1.6; padding: 2rem; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--c-muted); font-size: 0.95rem; margin-bottom: 2rem; }
+  .verdict-banner { border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; }
+  .verdict-banner.fail { background: var(--c-critical-bg); border: 2px solid var(--c-critical); }
+  .verdict-banner.pass { background: var(--c-pass-bg); border: 2px solid var(--c-pass); }
+  .verdict-icon { font-size: 2rem; }
+  .verdict-text strong { font-size: 1.1rem; }
+  .verdict-text p { color: var(--c-muted); font-size: 0.9rem; margin-top: 0.25rem; }
+  .section { margin-bottom: 2rem; }
+  .section-title { font-size: 1.1rem; font-weight: 600; border-bottom: 2px solid var(--c-border); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+  .finding { border-radius: 6px; border: 1px solid var(--c-border); padding: 1rem 1.25rem; margin-bottom: 0.75rem; }
+  .finding.critical { background: var(--c-critical-bg); border-left: 4px solid var(--c-critical); }
+  .finding.high { background: var(--c-high-bg); border-left: 4px solid var(--c-high); }
+  .finding.medium { background: var(--c-medium-bg); border-left: 4px solid var(--c-medium); }
+  .finding.low { background: var(--c-low-bg); border-left: 4px solid var(--c-low); }
+  .finding-header { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.5rem; }
+  .badge { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.2rem 0.55rem; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+  .badge.critical { background: var(--c-critical); color: white; }
+  .badge.high { background: var(--c-high); color: white; }
+  .badge.medium { background: var(--c-medium); color: #212529; }
+  .badge.low { background: var(--c-low); color: white; }
+  .finding-title { font-weight: 600; font-size: 0.97rem; }
+  .finding-body { font-size: 0.9rem; color: #333; }
+  .finding-body p { margin-bottom: 0.4rem; }
+  .finding-body code { background: rgba(0,0,0,0.07); padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.88em; font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .finding-meta { font-size: 0.8rem; color: var(--c-muted); margin-top: 0.5rem; }
+  .action-tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 3px; margin-right: 0.3rem; }
+  .action-tag.update { background: #cfe2ff; color: #084298; }
+  .action-tag.defer { background: #d1ecf1; color: #0c5460; }
+  .action-tag.discuss { background: #fff3cd; color: #664d03; }
+  .action-tag.confirm { background: #f8d7da; color: #842029; }
+  .sources { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.5rem; }
+  .source-link { font-size: 0.82rem; background: white; border: 1px solid var(--c-border); border-radius: 4px; padding: 0.3rem 0.7rem; color: var(--c-muted); font-family: monospace; }
+  .summary-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .summary-table th { background: var(--c-border); padding: 0.5rem 0.75rem; text-align: left; font-weight: 600; }
+  .summary-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--c-border); }
+  .summary-table tr:last-child td { border-bottom: none; }
+  .confirmed-list { list-style: none; padding: 0; }
+  .confirmed-list li { padding: 0.3rem 0; font-size: 0.9rem; }
+  .confirmed-list li::before { content: "✓ "; color: var(--c-pass); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Architecture Spine — Validation Report</h1>
+<p class="subtitle">l10n_cw_hr_payroll · v1.0R · Generated 2026-06-27 · Three reviewer lenses: rubric/compliance, verification, adversarial</p>
+
+<div class="verdict-banner fail">
+  <div class="verdict-icon">⛔</div>
+  <div class="verdict-text">
+    <strong>FAIL — 3 blocking issues must be resolved before build begins.</strong>
+    <p>Two adversarial findings demonstrate that independently-built units can each obey every AD to the letter and still produce wrong statutory tax. One verification finding flags a basiskorting figure inconsistent with the statutory PDF. All other findings are non-blocking.</p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Finding Summary</div>
+  <table class="summary-table">
+    <tr><th>Severity</th><th>Count</th><th>Action required</th></tr>
+    <tr><td><span class="badge critical">Critical</span></td><td>3</td><td>Resolve before build begins — spine update needed</td></tr>
+    <tr><td><span class="badge high">High</span></td><td>4</td><td>Resolve before first epic is handed to developers</td></tr>
+    <tr><td><span class="badge medium">Medium</span></td><td>2</td><td>Address in detailed design; low divergence risk</td></tr>
+    <tr><td><span class="badge low">Low</span></td><td>4</td><td>Fix-in-place or defer with a revisit condition</td></tr>
+  </table>
+</div>
+
+<!-- ===== CRITICAL ===== -->
+<div class="section">
+  <div class="section-title">Critical</div>
+
+  <div class="finding critical">
+    <div class="finding-header">
+      <span class="badge critical">Critical</span>
+      <div class="finding-title">C-1 — <code>bijzondere_beloning</code> read contract defines cumulative tax, but EXTRA_TAX needs a marginal rate</div>
+    </div>
+    <div class="finding-body">
+      <p>AD-5's read/representation contract for <code>bijzondere_beloning</code> says: <em>"compute_tax accumulates band-by-band and returns the tax."</em> EXTRA_TAX must apply a <strong>single marginal rate</strong> to the special income (e.g. 23 % on XCG 60,000 extra_earn). An implementor following AD-5 literally calls <code>compute_tax(annual_total, 'bijzondere_beloning', date)</code> and receives a cumulative tax amount — e.g. XCG 11,476 on XCG 80,000 — then misuses that figure where a rate of 23 % (= XCG 13,800) was needed. The two results differ by more than 20 % and no spine-defined function bridges the gap.</p>
+      <p><strong>Fix:</strong> Introduce a <code>lookup_marginal_rate(income, tax_type, date)</code> helper (returns the band rate at the income point) and bind EXTRA_TAX explicitly to it. Update AD-5's <code>bijzondere_beloning</code> entry to distinguish the cumulative helper (<code>compute_tax</code>, used for totals) from the marginal-rate helper (used by EXTRA_TAX).</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag update">Spine update</span>
+      Source: adversarial reviewer
+    </div>
+  </div>
+
+  <div class="finding critical">
+    <div class="finding-header">
+      <span class="badge critical">Critical</span>
+      <div class="finding-title">C-2 — <code>compute_tax</code> excess-band algorithm miscomputes <code>aov_aww_surcharge</code> by ~6×</div>
+    </div>
+    <div class="finding-body">
+      <p>A seeder following AD-5's "sliding" contract stores the 1 % AOV surcharge as a single band: <code>income_from=100,000, income_to=0, rate=1%</code>. The standard excess-band algorithm reduces <code>remaining</code> from the full income, not from <code>income_from</code>: against <code>annual_aov=120,000</code>, it computes <code>in_band = min(120,000, ∞) = 120,000</code>, yielding XCG 1,200 — six times the correct XCG 200 (1 % × 20,000 excess only). Two implementors choosing different arithmetic interpretations within the "sliding" contract's freedom both comply with every AD yet produce different numbers.</p>
+      <p><strong>Fix:</strong> Either (a) require two-band coverage from zero for excess-only types (so the standard algorithm is safe: band 1 covers 0–100,000 at 0 %, band 2 is uncapped at 1 %), or (b) bind Seq 62 (AOV_AWW_ER) explicitly to direct bracket arithmetic (<code>max(0, annual − ceiling) × rate</code>) rather than <code>compute_tax</code>, and name that in AD-5 as an exception.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag update">Spine update</span>
+      Source: adversarial reviewer
+    </div>
+  </div>
+
+  <div class="finding critical">
+    <div class="finding-header">
+      <span class="badge critical">Critical</span>
+      <div class="finding-title">C-3 — Basiskorting XCG 2,915/yr is inconsistent with the statutory PDF in the repo</div>
+    </div>
+    <div class="finding-body">
+      <p>The <code>Tabel-bijzonder-beloningen-2026-inclusief-basiskorting.pdf</code> (in the repo) shows the 0 % band extending to XCG 33,300 — implying an effective basiskorting of approximately XCG 3,247/yr at the 9.75 % marginal rate, not the XCG 2,915 cited in the spine (AD-13) and tech design. The 2,915 figure appears only in the tech design with no statutory citation. No arithmetic combination of 2,915 + verwervingskosten 500/yr bridges this gap cleanly.</p>
+      <p><strong>Fix:</strong> Obtain the governing <em>Landsverordening op de Loonbelasting</em> or the official 2026 MR and confirm the exact basiskorting before writing the seed data. If the correct figure differs, update AD-13 and the dated record.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag confirm">Statutory confirmation required</span>
+      Source: verification reviewer
+    </div>
+  </div>
+</div>
+
+<!-- ===== HIGH ===== -->
+<div class="section">
+  <div class="section-title">High</div>
+
+  <div class="finding high">
+    <div class="finding-header">
+      <span class="badge high">High</span>
+      <div class="finding-title">H-1 — Above-ceiling rate <code>0.465</code> in AD-20 is a statutory literal with no data home (violates AD-5)</div>
+    </div>
+    <div class="finding-body">
+      <p>AD-5 prohibits statutory rate literals in rule Python. AD-20 embeds <code>0.465</code> directly in the <code>lookup_loonbelasting</code> formula, and <code>hr.loonbelasting.tabel</code> has no field to store this rate. If the top marginal rate ever changes, the formula requires a code deploy — the exact PRD regulatory-agility failure AD-5 was written to prevent. One implementor hardcodes it; another looks for a field that does not exist.</p>
+      <p><strong>Fix:</strong> Add <code>above_ceiling_rate</code> (Float, default 0.465) to the <code>hr.loonbelasting.tabel</code> header model. <code>lookup_loonbelasting</code> reads this field. If the rate is considered constitutionally stable, add a named exception in AD-20 similar to the AD-4 exception, with a stated update policy.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag update">Spine update</span>
+      Source: rubric reviewer + adversarial reviewer (independently)
+    </div>
+  </div>
+
+  <div class="finding high">
+    <div class="finding-header">
+      <span class="badge high">High</span>
+      <div class="finding-title">H-2 — Shared ceilings (AVBZ 606,247.08; AOV 100,000) duplicated across <code>tax_type</code> records with no single owner</div>
+    </div>
+    <div class="finding-body">
+      <p>Per AD-5, the AVBZ ceiling lives in <code>avbz_er.income_to</code>; the AVBZ employee sliding band's top boundary must also reference it. No AD names which record owns the ceiling. A rate-administrator updating <code>avbz_er</code> on a rate change leaves <code>avbz_emp</code>'s top band stale — the "divergent copies" problem AD-5 says it prevents. Same for the AOV 100,000 ceiling shared between <code>aov_aww_emp</code> and <code>aov_aww_surcharge</code>.</p>
+      <p><strong>Fix:</strong> Add a convention that the employer record (<code>avbz_er</code>, <code>aov_aww_er</code>) is the canonical ceiling owner. Employee sliding-band records read the ceiling at runtime via a query on the employer record for the same date, or the employer ceiling is used to cap the annualised base before employee-rate lookup. Bind this in AD-5 under the per-type read contract.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag update">Spine update</span>
+      Source: adversarial reviewer
+    </div>
+  </div>
+
+  <div class="finding high">
+    <div class="finding-header">
+      <span class="badge high">High</span>
+      <div class="finding-title">H-3 — EXTRA_TAX marginal-rate base is undefined; AD-14 does not bind EXTRA_TAX</div>
+    </div>
+    <div class="finding-body">
+      <p>AD-14 fixes the premium base as <code>categories.BASIC + categories.ALW</code> but explicitly covers only SVB premium income bases. EXTRA_TAX uses the annual total ordinary wage to determine the marginal rate. The tech design uses <code>rules.TOTAL_LOON.amount × 12</code> (no overtime); an AD-14-spirit implementor uses <code>(categories.BASIC + categories.ALW) × 12</code> (overtime included). Employees with significant overtime receive different bijzondere beloning withholding from two compliant implementations.</p>
+      <p><strong>Fix:</strong> Extend AD-14 (or add a new AD) to name the income base for EXTRA_TAX's marginal-rate lookup. Confirm with statutory source whether overtime is included in the total ordinary wage for bijzondere beloningen rate selection.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag confirm">Statutory confirmation + spine update</span>
+      Source: adversarial reviewer
+    </div>
+  </div>
+
+  <div class="finding high">
+    <div class="finding-header">
+      <span class="badge high">High</span>
+      <div class="finding-title">H-4 — BVZ sliding-scale thresholds and AVBZ income threshold have no statutory source in the repo</div>
+    </div>
+    <div class="finding-body">
+      <p>The repo's <code>SVB-Tabel-2026.pdf</code> shows only flat rates: BVZ employee 4.3 %, AVBZ employee 1.5 %. The sliding-scale thresholds (<code>bvz_emp</code>: 0 % below XCG 12,000/yr, 4.3 % above XCG 18,000/yr; <code>avbz_emp</code>: threshold XCG 29,897.44) appear only in the tech design change log with no citation. Before seeding <code>bvz_emp</code> and <code>avbz_emp</code> as banded records, the governing SVB Landsverordening or official sliding-scale publication must be obtained and added to the repo.</p>
+      <p><strong>Fix:</strong> Source the statutory instrument (SVB landsverordening or ministerial regulation) confirming the sliding-scale bands. If the thresholds are correct, add the source to the repo. If the SVB table shows only flat rates, revise the seed data to flat records.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag confirm">Statutory confirmation required</span>
+      Source: verification reviewer
+    </div>
+  </div>
+</div>
+
+<!-- ===== MEDIUM ===== -->
+<div class="section">
+  <div class="section-title">Medium</div>
+
+  <div class="finding medium">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <div class="finding-title">M-1 — "Confirmed payslip lines" in AD-9 not mapped to an Odoo payslip state</div>
+    </div>
+    <div class="finding-body">
+      <p>AD-9 says YTD recomputes as "the sum over the year's confirmed payslip lines." Odoo payslip states are <code>draft</code>, <code>verify</code>, <code>done</code>, <code>cancel</code>. If two implementors differ on which states count as "confirmed" (e.g. <code>done</code> only vs. <code>verify + done</code>) the YTD scalar diverges. The reopen interaction with sibling runs from the same month is also undefined.</p>
+      <p><strong>Fix:</strong> Bind AD-9 to the specific Odoo state: "confirmed = payslip.state == 'done'." Clarify whether a reopened (state-reverted) payslip's lines are excluded until re-closed.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag update">Spine update (minor)</span>
+      Source: adversarial reviewer
+    </div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header">
+      <span class="badge medium">Medium</span>
+      <div class="finding-title">M-2 — Bijzondere beloningen 6-band correction lives only in the memlog, not in the spine</div>
+    </div>
+    <div class="finding-body">
+      <p>The official 2026 Belastingdienst publication has 6 bands; v3.0D tech design has 5 (the 30 % band for XCG 86,900–123,100 is missing). This is captured in the memlog and epics but not stated in the ARCHITECTURE-SPINE.md. An implementor reading only the spine may seed the wrong band count or reference the tech design's 5-band table.</p>
+      <p><strong>Fix:</strong> Add a note under AD-5's <code>bijzondere_beloning</code> entry listing all 6 correct bands, or reference the authoritative source.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag update">Spine update (minor)</span>
+      Source: rubric reviewer
+    </div>
+  </div>
+</div>
+
+<!-- ===== LOW ===== -->
+<div class="section">
+  <div class="section-title">Low</div>
+
+  <div class="finding low">
+    <div class="finding-header">
+      <span class="badge low">Low</span>
+      <div class="finding-title">L-1 — Lifecycle diagram omits the Close → Verify (reopen) arc defined in AD-9</div>
+    </div>
+    <div class="finding-body">
+      <p>The <code>stateDiagram-v2</code> shows Close as a terminal state (<code>Close → [*]</code>) but AD-9 explicitly defines a controlled reopen path (reverse journal + recompute). An implementor reading the diagram in isolation may not build the reopen transition.</p>
+      <p><strong>Fix:</strong> Add <code>Close → Verify : reopen (reverse journal)</code> arc to the diagram.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag update">Diagram fix</span>
+      Source: rubric reviewer
+    </div>
+  </div>
+
+  <div class="finding low">
+    <div class="finding-header">
+      <span class="badge low">Low</span>
+      <div class="finding-title">L-2 — AD-9 does not specify the payslip edit-window state during reopen</div>
+    </div>
+    <div class="finding-body">
+      <p>When a run is reopened, it's unclear whether payslips return to <code>draft</code> (editable) or <code>verify</code> (recomputable but locked). Two builders could diverge on what changes are permitted between reopen and re-close.</p>
+      <p><strong>Fix:</strong> Add one sentence to AD-9: "Reopening sets payslips back to <code>verify</code> (recomputable; source inputs remain frozen)."</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag update">Spine update (one line)</span>
+      Source: rubric reviewer
+    </div>
+  </div>
+
+  <div class="finding low">
+    <div class="finding-header">
+      <span class="badge low">Low</span>
+      <div class="finding-title">L-3 — 2026 MR (governing loonbelastingtabellen) not in repo; 2025 MR 144 is the current source</div>
+    </div>
+    <div class="finding-body">
+      <p>The repo contains MR 144 (2025 tables). The 2026 tables are present as PDFs; the 2026 MR publication itself is missing. The calculation logic is confirmed from available PDFs and is safe. For regulatory completeness, add the 2026 MR when available.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag defer">Defer — add when published</span>
+      Source: verification reviewer
+    </div>
+  </div>
+
+  <div class="finding low">
+    <div class="finding-header">
+      <span class="badge low">Low</span>
+      <div class="finding-title">L-4 — Odoo 19 salary-rule context API not verified against live Odoo 19 source</div>
+    </div>
+    <div class="finding-body">
+      <p>The payslip computation context (<code>payslip</code>, <code>employee</code>, <code>contract</code>, <code>categories</code>, <code>rules</code>, <code>inputs</code>, <code>worked_days</code>, <code>env</code>, assign <code>result</code>) is consistent with the hr_payroll pattern across Odoo 14–17 but was not checked against the Odoo 19 codebase specifically.</p>
+      <p><strong>Fix:</strong> Verify with a trivial test rule during dev-environment setup. Low risk; pattern is highly stable.</p>
+    </div>
+    <div class="finding-meta">
+      <span class="action-tag defer">Defer — verify at dev-env setup</span>
+      Source: verification reviewer
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONFIRMED ===== -->
+<div class="section">
+  <div class="section-title">Confirmed correct (verification reviewer, directly from statutory PDFs)</div>
+  <ul class="confirmed-list">
+    <li>Above-ceiling formula: <code>ceiling_tax + (TAX_INC − ceiling_wage) × 0.465</code> — confirmed from MR 144 § Algemeen</li>
+    <li>Maandtabel ceiling at XCG 16,670/month — confirmed from 2026 lb-maandtabel PDF</li>
+    <li>Maandtabel step 5.00 XCG — confirmed from 2026 lb-maandtabel PDF</li>
+    <li>Bijzondere beloningen 6 bands (0 → 9.75 %, 43,500 → 15 %, 58,000 → 23 %, 86,900 → 30 %, 123,100 → 37.5 %, 181,000 → 46.5 %) — confirmed from official 2026 Belastingdienst PDF</li>
+    <li>All SVB flat rates and ceilings as stated in the spine — confirmed from SVB-Tabel-2026.pdf</li>
+    <li><code>valid_from desc, id desc</code> loonbelasting table ordering — implementable in Odoo ORM <code>search()</code> with <code>order</code> param</li>
+    <li>Manifest fields: <code>countries: ['cw']</code>, version <code>19.0.0.1.0</code>, OPL-1 — correct for Odoo 19 localization pattern</li>
+    <li>All AD-17, AD-18, AD-19 conventions — internally consistent and correctly referenced</li>
+  </ul>
+</div>
+
+<!-- ===== REVIEWER FILES ===== -->
+<div class="section">
+  <div class="section-title">Full reviewer outputs</div>
+  <div class="sources">
+    <span class="source-link">reviews/review-rubric-and-compliance.md</span>
+    <span class="source-link">reviews/review-verification.md</span>
+    <span class="source-link">reviews/review-adversarial.md</span>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
