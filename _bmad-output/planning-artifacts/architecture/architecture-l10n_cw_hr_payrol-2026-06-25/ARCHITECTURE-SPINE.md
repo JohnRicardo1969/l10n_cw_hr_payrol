@@ -82,8 +82,12 @@ flowchart TD
   periodic.
 - **Exception — loonbelasting:** the `lb-*tabel` is already period-specific (monthly table → monthly
   result directly). LOONBEL_RAW (Seq 90) calls `lookup_loonbelasting` with the raw monthly `TAX_INC`
-  and receives a monthly tax amount — no × 12 / ÷ 12. AD-4 applies only to SVB premium ceilings and
-  thresholds. See AD-20.
+  and receives a monthly tax amount — no × 12 / ÷ 12. See AD-20.
+- **Superseded for SVB annual ceilings — use the cumulative method.** The per-month ×12 here is an
+  approximation that mis-fires at the ceiling for irregular income; for the **annual** SVB ceilings
+  (AOV/AWW, BVZ, AVBZ) the binding method is the **cumulative annual-maximum** of **AD-24**, not ×12/÷12.
+  ZV/OV use a monthly cap (AD-22), also not ×12. So this ×12/÷12 rule now governs no production premium
+  path directly — it is retained as the conceptual frame that AD-24 (annual) and the monthly caps refine.
 
 ### AD-5 — Dated-rate authority `[ADOPTED]` (resolves the rates fork)
 - **Binds:** **all** statutory rates and ceilings — the SVB premiums (AOV/AWW, AVBZ, BVZ, ZV, OV) and
@@ -336,6 +340,14 @@ flowchart TD
   - **Global scope:** no `company_id` — one national table for all CW companies (AD-19).
   - **Append-only:** table rows are never deleted; superseded headers are retained for audit
     (may be archived with `active=False` once a replacement is active).
+  - **Exclusief basiskorting is the required variant.** Belastingdienst publishes the maandtabel in
+    two variants — *inclusief* and *exclusief* basiskorting. The module seeds the **exclusief** table
+    (taxes from the first gulden) because basiskorting is applied **separately** as a monetary deduction
+    (AD-13). Seeding the *inclusief* variant would **double-count** the basiskorting (once in the table,
+    once in the deduction) and silently under-tax every employee. A seed/load guard verifies the loaded
+    table is the exclusief variant (its lowest wage rows are non-zero). The two are equivalent —
+    exclusief table − basiskorting = inclusief table — so output still reconciles to the official
+    inclusief calculator.
   - **v1.0R seeds the `maand` table only.** Other period types (`week`, `dag`, `halvedag`,
     `quincena`, `kwartaal`) are deferred to v1.1R when those pay periods are supported.
 
@@ -402,21 +414,21 @@ flowchart TD
     reach the maandtabel (`LOONBEL_RAW`, AD-20); (iii) EXTRA_TAX withholds on exactly the flagged
     components via the bijzondere-beloningen rate. Each earning is thus withheld by **exactly one**
     route — regular (incl. *regulier overwerk*) via `TAX_INC` → maandtabel, flagged-bijzondere (incl.
-    *incidentele overuren*) via EXTRA_TAX — **never both, never neither**. Whether overtime is
-    *incidenteel* or *regulier* is a **manual payroll-manager judgement** set by the flag — the engine
-    enforces **no frequency threshold**.
+    taxable *incidentele overuren*) via EXTRA_TAX, or **Lei di Bion-exempt overtime** via neither
+    (AD-23) — **never double-counted**. Overtime thus has **three** routes — *regulier* (maandtabel),
+    *incidenteel* (bijzondere), or *Lei di Bion-vrijgesteld* (exempt, AD-23) — selected by the payroll
+    manager via the component/flag; the engine enforces **no frequency threshold**.
   - **SVB premiums apply to bijzondere beloningen `[ADOPTED]`.** Premiums **do** apply (product owner,
     2026-06-27; corroborated by the source — *"alvast loonbelasting **en premies** over [het
     vakantiegeld] worden berekend"*). Category placement: the earnings **stay in `ALW`**, so AD-14's
     `BASIC + ALW` premium base includes them; only the `TAX_INC` exclusion above keeps them off the
     maandtabel. NET identity (AD-2) is undisturbed.
-  - **`[OPEN]` Premium-calculation method for a once-yearly bijzondere beloning.** Because the earning
-    is a once-yearly lump, AD-4's monthly ×12 annualisation **mis-fires at the ceiling** in the payment
-    month (it treats the lump as if paid 12×, so the cap math is wrong for a high earner — the case
-    NFR001 explicitly tests). The correct treatment is **cumulative-YTD** (premium on the YTD
-    *premie-loon* capped at the annual ceiling, minus premium already withheld), which is a **different**
-    mechanism from AD-4's per-month annualisation. Resolve before the premium-on-bijzondere story is
-    built; does not block AD-22 or the category decision above.
+  - **Premium-calculation method `[ADOPTED]`.** A once-yearly lump in the premium base would make AD-4's
+    monthly ×12 annualisation mis-fire at the ceiling. Resolved: SVB premiums use the **cumulative
+    annual-maximum** method (AD-24) — premium on the YTD *premie-loon* capped at the annual ceiling,
+    minus premium already withheld — so a bijzondere beloning bears premium only on the remaining
+    headroom under the ceiling (source: *"sociale premies … als je het jaarmaximum nog niet hebt
+    bereikt"*).
   - **Go-live.** Cases A/B read prior-year YTD, which does not exist in the module's first year; a
     manual prior-year-jaarloon entry covers existing employees for year one, after which YTD takes over.
   - **Effective date** `payslip.date_to` (AD-17); **company-scoped** operational data (AD-19); record on
@@ -469,10 +481,67 @@ flowchart TD
   - **Global scope**, no `company_id` (AD-19); **append-only** (AD-5); superseded records retained for
     audit.
   - **Ceiling application.** The **annual** ceilings (`aov_aww_grens`, `bvz_grens`, `avbz_grens`) are
-    applied per AD-4: annualise the base ×12, cap, apply rate, ÷12. The AOV surcharge applies 1 % to
-    `max(0, annualised base − aov_aww_grens)` (never the whole base). The **ZV/OV** cap is **per-period
+    applied **cumulatively** per AD-24 (YTD premie-loon capped at the ceiling, minus premium already
+    withheld) — **not** per-month ×12 — so a once-yearly lump is charged only on the remaining headroom.
+    The AOV surcharge is the cumulative 1 % **above** `aov_aww_grens`. The **ZV/OV** cap is **per-period
     (monthly)**: cap the **monthly** base at `zv_ov_loongrens_month` directly and apply the rate — **no
-    annualisation** (an AD-4 exception, like the period-specific loonbelasting table).
+    annualisation, not cumulative** (an AD-4 exception, like the period-specific loonbelasting table).
+
+### AD-23 — Lei di Bion exempt overtime `[ADOPTED]` (2026-06-27)
+- **Binds:** the Lei di Bion exempt-overtime component, the rules that build `TAX_INC` (Seq 80) and the
+  premium bases (`BVZ_PREM_INC` Seq 20, `AOV_PREM_INC` Seq 50), and the approval gate.
+- **Prevents:** exempt overtime being taxed or premium-charged; *and* the exemption being claimed
+  without the required, approved employer ruling — either of which is a statutory error.
+- **Background:** a recent Curaçao law (*Lei di Bion*) lets overtime up to **10 hours/week**, under an
+  approved employer *beschikking*, be paid **free of both loonbelasting and SVB premiums** (0 % / 0 %).
+  Beyond the cap, or without the ruling, the overtime is taxable.
+- **Rule:**
+  - A Lei di Bion overtime earning carries a boolean `is_lei_di_bion_exempt` flag. When eligible it is
+    **excluded from *both*** the `TAX_INC` base **and** the SVB premium base (the Seq 20 / Seq 50 bases
+    subtract flagged-exempt `ALW` components, alongside the AD-21 bijzondere exclusion) — so it bears
+    0 % loonbelasting **and** 0 % premies — yet it **is** paid to the employee (it remains in `NET`).
+  - **Eligibility = (≤ 10 overtime hours/week) AND (a valid employer *beschikking*).** The *beschikking*
+    must be **provided and approved by the most senior payroll role — the Payroll Manager**
+    (`group_l10n_cw_payroll_manager`, the same senior gate as AD-16). Without that approval recorded, the
+    overtime is **not** exempt and falls back to a taxable route (AD-21): *regulier* → maandtabel or
+    *incidenteel* → bijzondere.
+  - Hours **beyond** the 10/week cap are taxable on the excess by the same fallback; the exemption
+    applies only up to the cap. The cap is **per week**; since v1.0R payroll is monthly, *which* hours
+    fall under the weekly cap is determined at **overtime entry** (the eligible-exempt vs taxable split
+    is entered per component), not inferred by the engine from a monthly total — the engine applies the
+    split it is given (consistent with the no-frequency-threshold rule of AD-21).
+  - *Worked example (screenshot):* 10 overuren = XCG 302.90 gross → exempt: **302.90 net** (0/0); not
+    exempt: bijzondere 9.75 % → **273.37 net**.
+
+### AD-24 — Cumulative annual-maximum premiums `[ADOPTED]` (2026-06-27)
+- **Binds:** every SVB premium rule with an **annual** ceiling — AOV/AWW (employee, employer, 1 %
+  surcharge), BVZ (employee, employer), AVBZ (employee, employer).
+- **Prevents:** the per-month ×12 annualisation (AD-4) mis-firing at the ceiling when income is
+  **irregular** — a once-yearly lump (vakantiegeld, bonus, incidentele overuren) in one month, or a
+  mid-year crossing of the ceiling — which over- or under-charges premium in that month.
+- **Rule:** an annual-ceiling premium is computed **cumulatively (voortschrijdend)**, not per-month:
+  - `capped_ytd = min(premie_loon_YTD_incl_this_period, annual_ceiling)`
+  - `premium_to_date = capped_ytd × rate`
+  - `this_period_premium = premium_to_date − premium_already_withheld_YTD_before_this_period`
+  - so a payment bears premium **only on the remaining headroom** under the annual maximum, and the
+    year-total is exact regardless of how income is distributed across months. The AOV 1 % surcharge is
+    the cumulative amount **above** `aov_aww_grens` by the same logic.
+- **YTD-aware bases (interaction with AD-9 / AD-6 / AD-17):** the premium rules **read** the year's
+  `hr.wage.component.ytd` (premie-loon and premium already withheld) **as of the prior closed period**
+  (effective date `payslip.date_to`, AD-17). YTD is still **written** only at `action_close()` (AD-9);
+  reading it mid-calculation does not violate the single-commit-point. The never-gate bases
+  (`BVZ_PREM_INC`, `AOV_PREM_INC`, AD-6) remain the **this-period** premie-loon; the cumulative cap
+  lives in the premium rules. For the read to exist, the **premie-loon bases and each premium rule must
+  accumulate in `hr.wage.component.ytd`** (even though the bases are hidden, `appears_on_payslip =
+  False`) — that YTD is the year's premie-loon and premium-already-withheld the cap reads. The premie-loon
+  YTD is therefore **net of Lei di Bion-exempt overtime** (AD-23), since the base already excludes it, so
+  the cumulative ceiling stays consistent. Because each period's premium depends on prior periods,
+  **herberekening recomputes forward** — a correction to an earlier period is picked up by recomputing the
+  later ones, and the cumulative true-up (`premium_to_date − already_withheld`) self-corrects by
+  construction.
+- **Exception:** **ZV/OV** use a **monthly** cap (AD-22), not an annual ceiling, so they are **not**
+  cumulative — they cap the monthly base directly (AD-4 exception). Below any annual ceiling the
+  cumulative method equals the simple flat-rate × base, so ordinary monthly payslips are unaffected.
 
 ## Consistency Conventions
 
@@ -482,7 +551,7 @@ flowchart TD
 | Statutory data | SVB premium rates + ceilings as a per-year `hr.svb.parameters` record (AD-22); bijzondere beloningen rates and the Belastingdienst scalars (basiskorting, verwervingskosten, toeslagen) as dated `hr.tax.bracket` records (AD-5); loonbelasting as versioned `hr.loonbelasting.tabel` entries (AD-20). All three are selected by `valid_from desc, id desc` among active records valid on `payslip.date_to` — the latest effective version wins, corrections handled by upload order — and are append-only. **Authoritative source:** the official Belastingdienst (loonbelasting, incl. basiskorting) and SVB (premiums, ceilings) annual publications govern; any literal in the v3.0D tech design is indicative only and superseded by them. |
 | Money & rounding | XCG; round to 2 dp at rule output; deductions negative (AD-1); annualise to apply ceilings (AD-4). |
 | State & mutation | Run/payslip state via Odoo states; YTD, the bijzondere-tarief record, and the journal are mutated only in `action_close()` (AD-9, AD-21); rules are pure functions of the payslip context and **never write** — EXTRA_TAX may *read* the per-(employee, year) tarief record and the manager's pre-close basis/override input, but no rule writes any record. |
-| Audit & access | All custom models inherit `mail.thread`; four security groups enforce least privilege (Employee, Payroll User, Payroll Manager, Accountant); the most senior — Payroll Manager — also gates distribution (AD-16); employee record rule restricts payslips to `employee_id.user_id = user`. |
+| Audit & access | All custom models inherit `mail.thread`; four security groups enforce least privilege (Employee, Payroll User, Payroll Manager, Accountant); the most senior — Payroll Manager — also gates distribution (AD-16) and approves the Lei di Bion beschikking (AD-23); employee record rule restricts payslips to `employee_id.user_id = user`. |
 | Disable semantics | `active` = visibility+calc; `enabled` = calc-only (AD-7); never gate the never-gate set (AD-6). |
 | Effective date & missing data | All dated lookups use the payslip period-end date (AD-17); a missing required rate hard-errors, never 0 (AD-18). |
 | Schema migration | Schema changes (e.g. the AD-22 `hr.svb.parameters` model and the AD-5 `tax_type` changes) ship Odoo migration scripts that preserve historical payslips and closed YTD; never destructively drop or rewrite historical statutory records (append-only, AD-5, AD-22). |
@@ -554,6 +623,8 @@ l10n_cw_hr_payroll/
 | --- | --- | --- |
 | Statutory calculation engine (Sequence 10–150) | Localization — salary-rule Python | AD-1, AD-2, AD-3, AD-4, AD-6, AD-12, AD-14 |
 | Bijzondere beloningen withholding (EXTRA_TAX) + annual frozen tarief | Localization — EXTRA_TAX rule; Application — `hr.employee.bijzonder.tarief` | AD-5, AD-9, AD-21 |
+| Overtime treatment (regulier / incidenteel / Lei di Bion-exempt) | Localization — overtime rules; Application — beschikking approval | AD-21, AD-23, AD-16 |
+| SVB premiums — cumulative annual-maximum (ceiling-aware) | Localization — premium rules reading YTD | AD-22, AD-24, AD-9 |
 | SVB premium rate management / regulatory agility | Localization — `hr.svb.parameters` (per-year) | AD-5, AD-22 |
 | Loonbelasting table lookup + annual upload | Localization — `hr.loonbelasting.tabel` | AD-20 |
 | Three-tier wage component model | Application — sets, wage lines, wizard | AD-7, AD-8 |
