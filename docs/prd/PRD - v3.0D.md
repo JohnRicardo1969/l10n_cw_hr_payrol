@@ -427,6 +427,10 @@ The exclusief basiskorting variant is used (basiskorting applied once via the ma
 
 Per the official SVB-Tabel-2026, AVBZ and BVZ employee shares are **flat** (no income-graduated scale); the earlier "AVBZ 0.5%/1.5% at 29,897.44" and "BVZ sliding 0%–4.3% (12,000/18,000)" do not exist and are dropped (AD-5/AD-22). The ZV/OV loongrens is a **monthly** cap (XCG 7,146.10) applied directly — no annualisation. All SVB rates and ceilings live in the per-year `hr.svb.parameters` record (AD-22).
 
+**Annual-ceiling premiums are computed cumulatively (AD-24).** AOV/AWW (100,000), BVZ (150,000) and AVBZ (606,247.08) use the **cumulative annual-maximum** method — premium on the year-to-date premie-loon capped at the annual ceiling, minus premium already withheld — *not* per-month ×12 annualisation, which mis-fires at the ceiling when a once-yearly lump (vakantiegeld, bonus, incidentele overuren) lands in one month. A payment bears premium only on the remaining headroom under the annual maximum. Below any ceiling the result equals flat-rate × base, so ordinary monthly payslips are unchanged.
+
+**Lei di Bion exempt overtime (AD-23).** Overtime up to 10 hours/week, under an employer beschikking **provided and approved by the Payroll Manager**, is paid free of *both* loonbelasting and SVB premiums (0% / 0%) and is excluded from both `TAX_INC` and the premium bases while still paid in net. Beyond the cap, or without approval, the overtime falls back to a taxable route (regulier → maandtabel, or incidenteel → bijzondere).
+
 ## Rate Update Procedure
 
 Rates change without code deployment. The administrator opens Salarisadministratie → Configuratie → Tarieven, sets `valid_to` on all expiring records, and creates new records with the updated `valid_from` and rates. Historical records are never deleted, because they are required to recompute prior payslips correctly.

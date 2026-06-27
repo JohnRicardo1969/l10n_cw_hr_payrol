@@ -1071,6 +1071,19 @@ OVT_SUN_HRS, OVT_PH_HRS) and the configured rate stored on
 hr.employee.wage.line as parameter_value. They contribute to the ALW
 category alongside other allowances.
 
+SUPERSEDED METHOD (AD-24) — applies to all premium steps below. The
+`* 12` per-month annualisation shown in Steps 3-7 mis-fires at the annual
+ceiling when income is irregular (a once-yearly vakantiegeld/bonus lands in
+one month). The binding method is CUMULATIVE annual-maximum: premium =
+min(YTD_premie_loon_incl_this_period, annual_ceiling) * rate
+       − premium_already_withheld_YTD_before_this_period.
+The premium rules read hr.wage.component.ytd (as of the prior closed period,
+AD-17); YTD is still written only at action_close() (AD-9). ZV/OV keep their
+MONTHLY cap (not cumulative). Below any ceiling the cumulative result equals
+rate * base, so the listings below are correct for below-ceiling months only.
+Also: Lei di Bion exempt overtime (AD-23) is subtracted from these premium
+bases (and from TAX_INC) when an approved beschikking applies.
+
 Step 2 — BVZ_PREM_INC (Seq 20, hidden)
 
     VERWERVINGSKOSTEN_MONTHLY = 41.67
