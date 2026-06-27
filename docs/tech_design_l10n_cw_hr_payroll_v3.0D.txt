@@ -1077,10 +1077,14 @@ ceiling when income is irregular (a once-yearly vakantiegeld/bonus lands in
 one month). The binding method is CUMULATIVE annual-maximum: premium =
 min(YTD_premie_loon_incl_this_period, annual_ceiling) * rate
        − premium_already_withheld_YTD_before_this_period.
-The premium rules read hr.wage.component.ytd (as of the prior closed period,
-AD-17); YTD is still written only at action_close() (AD-9). ZV/OV keep their
-MONTHLY cap (not cumulative). Below any ceiling the cumulative result equals
-rate * base, so the listings below are correct for below-ceiling months only.
+The premium rules read PERIOD-BOUNDED SUMS of confirmed payslip lines with
+date_to < this payslip.date_to (NOT the annual YTD scalar, which has no period
+axis): premie_loon_before from the net BVZ_PREM_INC/AOV_PREM_INC base, and
+premium_withheld_before from the premium rule. Herberekening recomputes forward
+in ascending order. YTD scalar is still written only at action_close() (AD-9).
+ZV/OV keep their MONTHLY cap (not cumulative). Below any ceiling the cumulative
+result equals rate * base (within rounding), so the listings below are correct
+for below-ceiling months only.
 Also: Lei di Bion exempt overtime (AD-23) is subtracted from these premium
 bases (and from TAX_INC) when an approved beschikking applies.
 

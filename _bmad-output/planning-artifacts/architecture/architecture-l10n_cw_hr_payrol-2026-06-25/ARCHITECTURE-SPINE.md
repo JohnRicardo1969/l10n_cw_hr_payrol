@@ -345,9 +345,12 @@ flowchart TD
     (taxes from the first gulden) because basiskorting is applied **separately** as a monetary deduction
     (AD-13). Seeding the *inclusief* variant would **double-count** the basiskorting (once in the table,
     once in the deduction) and silently under-tax every employee. A seed/load guard verifies the loaded
-    table is the exclusief variant (its lowest wage rows are non-zero). The two are equivalent —
-    exclusief table − basiskorting = inclusief table — so output still reconciles to the official
-    inclusief calculator.
+    table is the exclusief variant by a **value check** — the **zero-tax band width ≈ 0** (the inclusief
+    table is tax-free up to ≈ `basiskorting ÷ first-rate` ≈ XCG 33,300/yr, the exclusief table taxes from
+    the first gulden), or equivalently a known wage point matches the known exclusief value — **not** a
+    fragile "first row non-zero" heuristic (which can false-reject an exclusief table whose first rows
+    round to 0.00 at the publication step). The two variants are equivalent — exclusief table −
+    basiskorting = inclusief table — so output still reconciles to the official inclusief calculator.
   - **v1.0R seeds the `maand` table only.** Other period types (`week`, `dag`, `halvedag`,
     `quincena`, `kwartaal`) are deferred to v1.1R when those pay periods are supported.
 
@@ -500,16 +503,21 @@ flowchart TD
     **excluded from *both*** the `TAX_INC` base **and** the SVB premium base (the Seq 20 / Seq 50 bases
     subtract flagged-exempt `ALW` components, alongside the AD-21 bijzondere exclusion) — so it bears
     0 % loonbelasting **and** 0 % premies — yet it **is** paid to the employee (it remains in `NET`).
-  - **Eligibility = (≤ 10 overtime hours/week) AND (a valid employer *beschikking*).** The *beschikking*
-    must be **provided and approved by the most senior payroll role — the Payroll Manager**
-    (`group_l10n_cw_payroll_manager`, the same senior gate as AD-16). Without that approval recorded, the
-    overtime is **not** exempt and falls back to a taxable route (AD-21): *regulier* → maandtabel or
-    *incidenteel* → bijzondere.
-  - Hours **beyond** the 10/week cap are taxable on the excess by the same fallback; the exemption
-    applies only up to the cap. The cap is **per week**; since v1.0R payroll is monthly, *which* hours
-    fall under the weekly cap is determined at **overtime entry** (the eligible-exempt vs taxable split
-    is entered per component), not inferred by the engine from a monthly total — the engine applies the
-    split it is given (consistent with the no-frequency-threshold rule of AD-21).
+  - **Eligibility = (≤ 10 overtime hours/week) AND (a valid, approved employer *beschikking*).** The
+    approval is a **dated record** (`hr.lei.di.bion.beschikking` or a dated approval field, with
+    `valid_from`/`valid_to` and an `approved_by`), **provided and approved by the Payroll Manager**
+    (`group_l10n_cw_payroll_manager`, the same senior gate as AD-16). Eligibility is evaluated
+    **point-in-time at `payslip.date_to`** (AD-17): a payslip is exempt only if an approved beschikking
+    is valid on that date. A revocation or new approval applies to periods by their `date_to`, **not**
+    retroactively within an already-computed period. Without a valid approval the overtime is **not**
+    exempt and falls back to a taxable route (AD-21): *regulier* → maandtabel or *incidenteel* →
+    bijzondere.
+  - **The 10 hrs/week cap is a manual determination, not engine arithmetic.** Since v1.0R is monthly,
+    the spine fixes **no** week→month conversion (40 vs 43.33 vs ISO weeks): the approver enters the
+    **eligible-exempt hours** as the exempt component and any remainder as a taxable overtime component.
+    The engine applies the split it is **given** and computes no cap (consistent with AD-21's
+    no-frequency-threshold rule). When both exempt and *regulier* overtime exist, the cap counts only
+    the flagged-exempt hours.
   - *Worked example (screenshot):* 10 overuren = XCG 302.90 gross → exempt: **302.90 net** (0/0); not
     exempt: bijzondere 9.75 % → **273.37 net**.
 
@@ -526,22 +534,38 @@ flowchart TD
   - so a payment bears premium **only on the remaining headroom** under the annual maximum, and the
     year-total is exact regardless of how income is distributed across months. The AOV 1 % surcharge is
     the cumulative amount **above** `aov_aww_grens` by the same logic.
-- **YTD-aware bases (interaction with AD-9 / AD-6 / AD-17):** the premium rules **read** the year's
-  `hr.wage.component.ytd` (premie-loon and premium already withheld) **as of the prior closed period**
-  (effective date `payslip.date_to`, AD-17). YTD is still **written** only at `action_close()` (AD-9);
-  reading it mid-calculation does not violate the single-commit-point. The never-gate bases
-  (`BVZ_PREM_INC`, `AOV_PREM_INC`, AD-6) remain the **this-period** premie-loon; the cumulative cap
-  lives in the premium rules. For the read to exist, the **premie-loon bases and each premium rule must
-  accumulate in `hr.wage.component.ytd`** (even though the bases are hidden, `appears_on_payslip =
-  False`) — that YTD is the year's premie-loon and premium-already-withheld the cap reads. The premie-loon
-  YTD is therefore **net of Lei di Bion-exempt overtime** (AD-23), since the base already excludes it, so
-  the cumulative ceiling stays consistent. Because each period's premium depends on prior periods,
-  **herberekening recomputes forward** — a correction to an earlier period is picked up by recomputing the
-  later ones, and the cumulative true-up (`premium_to_date − already_withheld`) self-corrects by
-  construction.
+- **Cumulative reads are period-bounded sums of confirmed lines — NOT the annual YTD scalar.**
+  `hr.wage.component.ytd` is a single annual scalar (Σ over the year's confirmed lines, AD-9) with **no
+  period axis**, so it cannot express "before this period" once a run is reopened or recomputed (the
+  scalar already includes the current and later periods). The cumulative cap therefore reads
+  **period-bounded sums of confirmed payslip lines with `date_to < this payslip.date_to`** (AD-17):
+  `premie_loon_before` = Σ the net premie-loon **base** rule's confirmed lines for prior periods;
+  `premium_withheld_before` = Σ this premium rule's confirmed lines for prior periods. **Never** derive
+  premie-loon as `premium ÷ rate` — above the ceiling premium is pinned at `ceiling × rate`, so `÷ rate`
+  loses the over-ceiling base.
+- **Named premie-loon base.** The cumulative base is the **net Seq 20 / Seq 50 base rule** —
+  `BVZ_PREM_INC` for BVZ, and `AOV_PREM_INC` for AOV/AWW, the AOV surcharge, **and AVBZ** (same
+  `BASIC + ALW` base). It is `categories.BASIC + categories.ALW` **minus** Lei di Bion-exempt overtime
+  (AD-23), **including** taxable bijzondere beloningen (AD-21). These bases are payslip lines (hidden,
+  `appears_on_payslip = False`) so their confirmed lines are summable; the premie-loon is **net of
+  Lei di Bion-exempt by construction**.
+- **A disabled-premium month exempts its wage from that premium's cumulative base — it does not defer.**
+  The never-gate base accrues regardless of a premium's `enabled` flag (AD-6), so the cumulative
+  `premie_loon_before` for a premium counts **only periods in which that premium was enabled**. A
+  mid-year `enabled = False` month therefore bears no premium **and** consumes no ceiling, and
+  re-enabling does **not** claw back the skipped months. (Statutory: an exempt month is genuinely exempt,
+  not deferred; a full-year exemption is clean zeros, consistent with AD-7.)
+- **Herberekening recomputes forward — mandatory, ascending.** Because each period's premium depends on
+  every prior period, reopening or recomputing period *n* **requires** recomputing every later confirmed
+  period *n+1 …* in **ascending** order; a run may **not** close leaving stale later periods. With the
+  period-bounded read, the result is then order-independent and exact. YTD is still **written** only at
+  `action_close()` (AD-9); the period-bounded query reads confirmed lines directly and does not violate
+  the single-commit-point.
 - **Exception:** **ZV/OV** use a **monthly** cap (AD-22), not an annual ceiling, so they are **not**
   cumulative — they cap the monthly base directly (AD-4 exception). Below any annual ceiling the
-  cumulative method equals the simple flat-rate × base, so ordinary monthly payslips are unaffected.
+  cumulative method equals the simple flat-rate × base **to within rounding** — it redistributes the
+  per-period ±0.01 rounding but the year-total is identical, so ordinary monthly payslips are unaffected
+  beyond rounding (inside the XCG 0.02 tolerance).
 
 ## Consistency Conventions
 
