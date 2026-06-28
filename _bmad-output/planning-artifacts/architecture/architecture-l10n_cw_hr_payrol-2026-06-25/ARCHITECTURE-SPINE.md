@@ -214,19 +214,25 @@ flowchart TD
 ### AD-13 — Statutory defaults applied unconditionally `[ASSUMPTION]`
 - **Binds:** verwervingskosten forfeit and basiskorting.
 - **Prevents:** an inconsistent baseline across employees; a basiskorting double-count.
-- **Rule:** verwervingskosten (XCG 41.67/mo) and basiskorting (XCG 3 247.35/yr — the official 2026
-  figure; the v3.0D 2 915 was the prior-year value, AD-5) apply automatically to **all** employees for
-  v1.0R (Option A). A per-employee disable is a deferred change request (PRD A-06 / OQ-02).
+- **Rule:** verwervingskosten (XCG 41.67/mo — the statutory forfeit, max XCG 500/yr) and basiskorting
+  (XCG 2 915/yr = XCG 242.92/mo — the official 2026 figure on the Belastingdienst *Loonbelastingverklaring
+  2026*, AD-5) apply automatically to **all** employees for v1.0R (Option A). A per-employee disable is a
+  deferred change request (PRD A-06 / OQ-02). *(Correction 2026-06-28: the earlier 3 247.35 was an
+  inkomstenbelasting figure, not the loonbelasting withholding basiskorting; the Loonbelastingverklaring
+  2026 states 2 915/yr. The v3.0D 2 915 was therefore correct, not a prior-year value.)*
 - **No double-count — the maandtabel is *exclusief basiskorting*.** The 2026 `lb-maandtabel` is published
   **exclusief basiskorting** (it taxes from the first gulden), so basiskorting is **not** already in
   `LOONBEL_RAW`; it is a **live, required** separate deduction applied **after** the table lookup
   (Seq 100, as a monetary deduction from the tax amount per AD-12), floored at 0. This is what consumes
   the basiskorting scalar read via `compute_tax` (AD-5).
-- **`[OPEN]` Application point — verwervingskosten vs basiskorting.** Verwervingskosten is statutorily an
-  **income deduction** (reduces the taxable wage → `TAX_INC`, Seq 80), whereas basiskorting and the
-  toeslagen are **tax credits** (reduce the tax amount, Seq 100, AD-12). The spine currently lumps both
-  as post-table deductions; confirm verwervingskosten is applied at `TAX_INC` (pre-table), not as a tax
-  credit, before the toeslagen story is built.
+- **`[RESOLVED 2026-06-28]` Application point — verwervingskosten vs basiskorting.** Confirmed against the
+  official Belastingdienst *Loonbelastingverklaring 2026* and source guidance: the two are distinct
+  instruments at distinct sequence points. **Verwervingskosten is an income deduction (aftrekpost)** —
+  it reduces the taxable wage `TAX_INC` **pre-table (Seq 80)**; **basiskorting and the toeslagen are tax
+  credits (heffingskortingen)** — they reduce the computed tax amount **post-table (Seq 100, AD-12)**,
+  floored at 0. Verwervingskosten touches **only** `TAX_INC` (never the SVB premie-loon base, AD-14).
+  The earlier "lumps both as post-table deductions" risk is closed: they must **not** share a sequence
+  point.
 
 ### AD-14 — Canonical premium-base derivation `[ADOPTED]`
 - **Binds:** all premium income-base rules (`BVZ_PREM_INC`, `AOV_PREM_INC`).
