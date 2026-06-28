@@ -1,5 +1,5 @@
 ---
-stepsCompleted: ['step-01-validate-prerequisites']
+stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics']
 inputDocuments:
   - 'docs/prd/PRD - v3.0D.md'
   - '_bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/ARCHITECTURE-SPINE.md'
@@ -137,11 +137,59 @@ De module gebruikt de standaardschermen van Odoo (lijst-/formulier-/menuweergave
 
 ### FR-dekkingskaart
 
-{{requirements_coverage_map}}
+- FR001: Epic 2 — Maandelijkse payroll voor alle medewerkers in één actie draaien.
+- FR002: Epic 2 — Geordende salarisregelketen (Seq 10–150) met verborgen hulpregels.
+- FR003: Epic 2 — Brutoloon (`TOTAL_LOON`) = loon + natura-loon.
+- FR004: Epic 2 — Vier overurensoorten als benoemde `ALW`-regels.
+- FR005: Epic 2 — BVZ-zorgpremie (werkgever 9,3% / werknemer 4,3%, jaarplafond).
+- FR006: Epic 2 — AOV/AWW-premie (cumulatief, plafond, 1%-opslag).
+- FR007: Epic 2 — AVBZ-langdurigezorgpremie op de AVBZ-geplafonneerde AOV-grondslag.
+- FR008: Epic 2 — Loonbelasting-tabelopzoeking (`TAX_INC`) + tarief boven het plafond.
+- FR009: Epic 2 — Standaard basiskorting plus medewerker-specifieke heffingskortingen.
+- FR010: Epic 2 — Bijzondere beloningen marginaal-tarief belasting (AD-21).
+- FR011: Epic 2 — ZV (1,9%) en OV (gevarenklasse) werkgeverspremies op het maandplafond.
+- FR011b: Epic 2 — Lei di Bion-vrijgestelde overuren (0%/0%, AD-23).
+- FR012: Epic 2 — Nettoloon (`NET`) en onbelaste vergoedingen (`NONTAXED`).
+- FR013: Epic 2 — Informatief totaal werkgeverskosten (`TOTAL_ER_COST`).
+- FR014: Epic 2 — Per-medewerker aan/uit-poort op loonregels.
+- FR015: Epic 1 — Drie-lagen looncomponentmodel (Tiers 1/2/3).
+- FR016: Epic 1 — Toepaswizard kopieert een Tier 2-set naar onafhankelijke Tier 3-regels.
+- FR017: Epic 1 — Gedateerde, append-only wettelijke gegevensstores (SVB-parameters, belastingschijven, lb-tabel).
+- FR018: Epic 3 — Jaar-tot-datum-totalen herberekend bij afsluiten (leeg model opgezet in Epic 1; gelezen door Epic 2 voor cumulatieve premies).
+- FR019: Epic 1 — Heffingskortingsvelden medewerker, beschikking, en contract-OV%.
+- FR020: Epic 3 — Run-/loonstrook-statuslevenscyclus met herberekening.
+- FR021: Epic 3 — Afsluiten: bevestigen, vergrendelen, YTD herberekenen, boeking plaatsen, rapporten publiceren.
+- FR022: Epic 3 — Per constructie sluitende journaalpost (`account.move`).
+- FR023: Epic 4 — Loonstrook-PDF (rapport A-01).
+- FR024: Epic 4 — Loonbelastingaangifte (B-01) en SVB-premieaangifte (B-02), hele XCG.
+- FR025: Epic 4 — Sluitend journaalpost-overzicht (rapport B-05).
+- FR026: Epic 1 — Vier least-privilege beveiligingsrollen.
+- FR027: Epic 1 — Eigen-loonstrook record rule (`employee_id.user_id = user`).
+- FR028: Epic 3 — Automatische run-deelname / contractperiode-uitsluiting.
+- FR029: Epic 1 — Contractstartdatum (verplicht) en einddatum (optioneel).
+- FR030: Epic 3 — Distributie loonstroken alleen voor senior, na afsluiten.
+- FR031: Epic 1 — Manager CSV-upload van de lb-maandtabel (jaarlijks + tussentijdse correctie).
 
 ## Epic-lijst
 
-{{epics_list}}
+### Epic 1: Modulefundament, Configuratie & Beveiliging
+Een salarisadministrateur kan de module installeren, alle wettelijke tarieven en tabellen laden en onderhouden, herbruikbare looncomponentsets opbouwen, ze aan medewerkers toewijzen, fiscale gegevens van medewerker en contract vastleggen, en werken onder least-privilege rollen — alles wat nodig is voordat een loonstrook wordt berekend. Zet het greenfield moduleskelet op, het drie-lagen looncomponentmodel, de gedateerde wettelijke gegevensstores (met CSV-import en 2026-seed-data), het per-jaar `hr.wage.component.ytd`-model (leeg), het gescopeerde thema, en de Nederlandse vertaling.
+**Gedekte FR's:** FR015, FR016, FR017, FR019, FR026, FR027, FR029, FR031
+**AR's / UX-DR's:** AR001, AR014, AR015, AR016, AR022, AR023, UX-DR001, UX-DR002, UX-DR003
+
+### Epic 2: Wettelijke Payroll-berekeningsengine
+Een correcte maandelijkse loonstrook berekent voor elke representatieve medewerker — standaard, BVZ-vrijgesteld, boven het plafond, en met bijzondere beloningen — overeenkomstig de officiële 2026 Belastingdienst/SVB-publicaties binnen XCG 0,02. Implementeert de geordende salarisregelketen en alle wettelijke componenten: brutoloon, overuren, de SVB-premies (BVZ, AOV/AWW, AVBZ, ZV/OV), loonbelasting met heffingskortingen, bijzondere beloningen, Lei di Bion-vrijgestelde overuren, nettoloon, werkgeverskosten, en de aan/uit-poort. Berekent één loonstrook onafhankelijk van de batch-levenscyclus.
+**Gedekte FR's:** FR001, FR002, FR003, FR004, FR005, FR006, FR007, FR008, FR009, FR010, FR011, FR011b, FR012, FR013, FR014
+**AR's:** AR002, AR003, AR004, AR005, AR006, AR007, AR008, AR009, AR012, AR013, AR017, AR020, AR021, AR024
+
+### Epic 3: Run-levenscyclus, Boekhouding & Distributie
+Een salarisadministratie-manager draait de volledige maandcyclus: genereer de batch (waarbij medewerkers zonder gewerkte uren of met een geëindigd contract automatisch worden weggelaten), herbereken indien nodig, sluit dan eenmalig af om de jaar-tot-datum-totalen vast te leggen en een sluitende journaalpost te plaatsen, en distribueer ten slotte de loonstroken. Afsluiten is het enige commit-punt; heropenen draait de journaalpost terug en opnieuw afsluiten blijft correct.
+**Gedekte FR's:** FR018, FR020, FR021, FR022, FR028, FR030
+**AR's:** AR010, AR011, AR019
+
+### Epic 4: Wettelijke Rapporten
+Elke afgesloten run produceert de officiële Curaçaose documenten en aangiften: de loonstrook-PDF (A-01), de maandelijkse loonbelastingaangifte (B-01) en SVB-premieaangifte (B-02) in hele XCG, en het sluitende journaalpost-overzicht (B-05).
+**Gedekte FR's:** FR023, FR024, FR025
 
 # Definities
 

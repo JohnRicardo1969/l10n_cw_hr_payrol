@@ -1,5 +1,5 @@
 ---
-stepsCompleted: ['step-01-validate-prerequisites']
+stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics']
 inputDocuments:
   - 'docs/prd/PRD - v3.0D.md'
   - '_bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/ARCHITECTURE-SPINE.md'
@@ -133,11 +133,59 @@ The module uses Odoo's standard screens (list/form/menu views), with a custom sc
 
 ### FR Coverage Map
 
-{{requirements_coverage_map}}
+- FR001: Epic 2 — Run monthly payroll for all employees in one action.
+- FR002: Epic 2 — Ordered salary-rule chain (Seq 10–150) with hidden helper rules.
+- FR003: Epic 2 — Gross pay (`TOTAL_LOON`) = wage + natura-loon.
+- FR004: Epic 2 — Four overtime types as named `ALW` lines.
+- FR005: Epic 2 — BVZ health premium (employer 9.3% / employee 4.3%, yearly cap).
+- FR006: Epic 2 — AOV/AWW premium (cumulative, ceiling, 1% surcharge).
+- FR007: Epic 2 — AVBZ long-term-care premium on the AVBZ-capped AOV base.
+- FR008: Epic 2 — Loonbelasting table lookup (`TAX_INC`) + above-ceiling rate.
+- FR009: Epic 2 — Standard basiskorting plus employee-specific tax credits.
+- FR010: Epic 2 — Bijzondere beloningen marginal-rate tax (AD-21).
+- FR011: Epic 2 — ZV (1.9%) and OV (risk-class) employer premiums on the monthly cap.
+- FR011b: Epic 2 — Lei di Bion exempt overtime (0%/0%, AD-23).
+- FR012: Epic 2 — Net pay (`NET`) and untaxed reimbursements (`NONTAXED`).
+- FR013: Epic 2 — Informational total employer cost (`TOTAL_ER_COST`).
+- FR014: Epic 2 — Per-employee enable/disable gate on wage lines.
+- FR015: Epic 1 — Three-tier wage-component model (Tiers 1/2/3).
+- FR016: Epic 1 — Apply wizard copies a Tier 2 set into independent Tier 3 lines.
+- FR017: Epic 1 — Dated, append-only statutory data stores (SVB params, tax brackets, lb-tabel).
+- FR018: Epic 3 — Year-to-date totals recomputed on close (model stood up empty in Epic 1; read by Epic 2 for cumulative premiums).
+- FR019: Epic 1 — Employee tax-credit fields, beschikking, and contract OV%.
+- FR020: Epic 3 — Run/payslip stage lifecycle with herberekening.
+- FR021: Epic 3 — Close: confirm, lock, recompute YTD, post journal, publish reports.
+- FR022: Epic 3 — Balanced journal entry by construction (`account.move`).
+- FR023: Epic 4 — Payslip PDF (report A-01).
+- FR024: Epic 4 — Wage-tax return (B-01) and SVB premium return (B-02), whole XCG.
+- FR025: Epic 4 — Balanced journal-entry summary (report B-05).
+- FR026: Epic 1 — Four least-privilege security roles.
+- FR027: Epic 1 — Own-payslip record rule (`employee_id.user_id = user`).
+- FR028: Epic 3 — Automatic run membership / contract-period exclusion.
+- FR029: Epic 1 — Contract start (required) and end (optional) dates.
+- FR030: Epic 3 — Senior-only payslip distribution after close.
+- FR031: Epic 1 — Manager CSV upload of the lb-maandtabel (annual + mid-year correction).
 
 ## Epic List
 
-{{epics_list}}
+### Epic 1: Module Foundation, Configuration & Security
+A payroll admin can install the module, load and maintain all statutory rates and tables, build reusable wage-component sets, assign them to employees, capture employee and contract tax data, and operate under least-privilege roles — everything needed before a payslip is computed. Stands up the greenfield module skeleton, the three-tier wage-component model, the dated statutory data stores (with CSV import and 2026 seed data), the per-year `hr.wage.component.ytd` model (empty), the scoped theme, and the Dutch translation.
+**FRs covered:** FR015, FR016, FR017, FR019, FR026, FR027, FR029, FR031
+**ARs / UX-DRs:** AR001, AR014, AR015, AR016, AR022, AR023, UX-DR001, UX-DR002, UX-DR003
+
+### Epic 2: Statutory Payroll Calculation Engine
+A correct monthly payslip computes for any representative employee — standard, BVZ-exempt, above-ceiling, and with special remuneration — matching the official 2026 Belastingdienst/SVB publications within XCG 0.02. Implements the ordered salary-rule chain and all statutory components: gross pay, overtime, the SVB premiums (BVZ, AOV/AWW, AVBZ, ZV/OV), loonbelasting with tax credits, bijzondere beloningen, Lei di Bion exempt overtime, net pay, employer cost, and the enable/disable gate. Computes a single payslip independently of the batch lifecycle.
+**FRs covered:** FR001, FR002, FR003, FR004, FR005, FR006, FR007, FR008, FR009, FR010, FR011, FR011b, FR012, FR013, FR014
+**ARs:** AR002, AR003, AR004, AR005, AR006, AR007, AR008, AR009, AR012, AR013, AR017, AR020, AR021, AR024
+
+### Epic 3: Run Lifecycle, Accounting & Distribution
+A payroll manager runs the full monthly cycle: generate the batch (automatically excluding employees with no worked hours or an ended contract), recalculate as needed, then close once to commit the year-to-date totals and post a balanced journal entry, and finally distribute payslips. Close is the single commit point; reopening reverses the journal entry and re-close stays correct.
+**FRs covered:** FR018, FR020, FR021, FR022, FR028, FR030
+**ARs:** AR010, AR011, AR019
+
+### Epic 4: Statutory Reports
+Each closed run produces the official Curaçao documents and filings: the payslip PDF (A-01), the monthly wage-tax return (B-01) and SVB premium return (B-02) in whole XCG, and the balanced journal-entry summary (B-05).
+**FRs covered:** FR023, FR024, FR025
 
 # Definitions
 
