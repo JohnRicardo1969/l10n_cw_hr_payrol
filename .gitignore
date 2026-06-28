@@ -125,3 +125,6 @@ docs/_build/
 
 # Temporary files
 _TEMP/
+
+# AI assistant configs
+.agents
