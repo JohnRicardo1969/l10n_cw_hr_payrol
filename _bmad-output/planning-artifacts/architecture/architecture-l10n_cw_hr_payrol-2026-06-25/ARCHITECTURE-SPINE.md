@@ -555,12 +555,22 @@ flowchart TD
   (AD-23), **including** taxable bijzondere beloningen (AD-21). These bases are payslip lines (hidden,
   `appears_on_payslip = False`) so their confirmed lines are summable; the premie-loon is **net of
   Lei di Bion-exempt by construction**.
-- **A disabled-premium month exempts its wage from that premium's cumulative base — it does not defer.**
-  The never-gate base accrues regardless of a premium's `enabled` flag (AD-6), so the cumulative
-  `premie_loon_before` for a premium counts **only periods in which that premium was enabled**. A
-  mid-year `enabled = False` month therefore bears no premium **and** consumes no ceiling, and
-  re-enabling does **not** claw back the skipped months. (Statutory: an exempt month is genuinely exempt,
-  not deferred; a full-year exemption is clean zeros, consistent with AD-7.)
+- **A premium's enable/disable status is stable within a tax year (set-once invariant) — so the
+  cumulative read needs no per-period re-gate.** `[RESOLVED 2026-06-28]` BVZ enrolment is **sticky**:
+  once BVZ-insured an employee must remain insured; to stay **outside** the mandatory BVZ one must have
+  been privately insured **continuously (ononderbroken) since 31 January 2013** — any interruption ends
+  the exemption permanently; and the ANG 150 000 income-grens (DGA/ondernemer/gepensioneerde above
+  the grens → wettelijk private) is an **annual** determination, not a monthly toggle. So within a tax
+  year an annual-ceiling premium is either **enabled for all periods or disabled for all periods**.
+  Consequently the never-gate base sum (`premie_loon_before` over prior confirmed periods) **equals** the
+  enabled-period sum — there is no divergence, no mid-year claw-back, and **no per-premium counted-base
+  line is required**. A full-year disable is clean zeros (consistent with AD-7); an enabled premium has
+  every prior period in its base, exactly as the cumulative formula expects.
+- **Mid-year enrolment change = deferred change request (out of scope for v1.0R).** Because status is
+  set-once, a mid-year `enabled` flip is not a supported operational flow. **If** it is ever required,
+  the fix is a per-premium hidden "counted-base" line (`base if that premium was enabled this period,
+  else 0`), summed in place of the shared never-gate base — re-gating per period and reproducible from
+  confirmed lines (AD-17). Documented here so the escape hatch is known, but not built for v1.0R.
 - **Herberekening recomputes forward — mandatory, ascending.** Because each period's premium depends on
   every prior period, reopening or recomputing period *n* **requires** recomputing every later confirmed
   period *n+1 …* in **ascending** order; a run may **not** close leaving stale later periods. With the
