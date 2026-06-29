@@ -15,6 +15,13 @@ sources:
 companions: []
 ---
 
+::: {custom-style="Title"}
+l10n_cw_hr_payroll — Architecture Spine
+:::
+::: {custom-style="Subtitle"}
+Curaçao Payroll Localization for Odoo 19 Enterprise — build-time consistency contract
+:::
+
 # Architecture Spine — l10n_cw_hr_payroll
 
 The build-time consistency contract for the module. It fixes only the invariants that keep ~21 salary
@@ -54,12 +61,14 @@ flowchart TD
 ```
 
 ### AD-1 — Sign convention `[ADOPTED]`
+
 - **Binds:** all salary rules.
 - **Prevents:** `NET` miscomputing when an author returns a positive deduction.
 - **Rule:** employee deductions and employee premiums return **negative** amounts; employer costs and
   income-base intermediates return positive. `NET` sums categories directly and relies on this.
 
 ### AD-2 — Category-assignment contract `[ADOPTED]`
+
 - **Binds:** every rule's `category_id`.
 - **Prevents:** an employer cost landing in `DED`, or an allowance outside `ALW`, silently breaking
   `NET` while every other rule is obeyed.
@@ -69,6 +78,7 @@ flowchart TD
   (employer-cost debit + payable credit). The amount paid to the employee is `NET + NONTAXED`.
 
 ### AD-3 — Strict sequence + reference discipline `[ADOPTED]`
+
 - **Binds:** all salary rules.
 - **Prevents:** two authors reordering or forward-referencing and producing different results.
 - **Rule:** rules evaluate in fixed ascending `sequence` (10–150). A rule may reference only **prior**
@@ -76,6 +86,7 @@ flowchart TD
   `appears_on_payslip = False`.
 
 ### AD-4 — Annualisation convention `[ADOPTED]`
+
 - **Binds:** every rule applying a statutory ceiling, threshold, or bracket.
 - **Prevents:** one author applying an annual ceiling directly to a monthly figure.
 - **Rule:** periodic (monthly) base × 12 → apply the annual ceiling/scale/bracket → ÷ 12 back to
@@ -90,6 +101,7 @@ flowchart TD
   path directly — it is retained as the conceptual frame that AD-24 (annual) and the monthly caps refine.
 
 ### AD-5 — Dated-rate authority `[ADOPTED]` (resolves the rates fork)
+
 - **Binds:** **all** statutory rates and ceilings — the SVB premiums (AOV/AWW, AVBZ, BVZ, ZV, OV) and
   their ceilings, the bijzondere-beloningen rates, the verwervingskosten forfeit, the basiskorting, and
   the toeslagen.
@@ -133,6 +145,7 @@ flowchart TD
   and the Belastingdienst scalars.)*
 
 ### AD-6 — Enable/disable gate + never-gate set `[ADOPTED]`
+
 - **Binds:** all premium/tax computation rules and the six shared intermediates.
 - **Prevents:** gating a shared base (e.g. `AOV_PREM_INC`) and silently breaking AVBZ for an
   AOV-exempt employee.
@@ -142,6 +155,7 @@ flowchart TD
   `LOONBEL_RAW` (90), `NET` (130), `TOTAL_ER_COST` (150).
 
 ### AD-7 — `active` vs `enabled` semantic split `[ADOPTED]`
+
 - **Binds:** `hr.employee.wage.line`.
 - **Prevents:** conflating UI visibility with calculation participation; losing the audit trail of a
   deliberate exemption.
@@ -150,6 +164,7 @@ flowchart TD
   `active = True, enabled = False`.
 
 ### AD-8 — Three-tier decoupling `[ADOPTED]`
+
 - **Binds:** `hr.salary.rule` (T1) → `hr.wage.component.set` (T2) → `hr.employee.wage.line` (T3).
 - **Prevents:** a template edit retroactively mutating live employee payroll; ambiguous ownership of a
   wage line.
@@ -158,6 +173,7 @@ flowchart TD
   creation. After apply, T3 is the sole owner of its values.
 
 ### AD-9 — Single state-commit point `[ADOPTED]`
+
 - **Binds:** `hr.payslip.run.action_close()`.
 - **Prevents:** double-counted YTD or duplicate/unbalanced journal postings from a second mutation path.
 - **Rule:** `action_close()` is the **only** place results are committed, in order: confirm + lock
@@ -183,6 +199,7 @@ flowchart TD
   Deferred).
 
 ### AD-10 — Accounting balance by construction `[ADOPTED]`
+
 - **Binds:** the journal posted at close.
 - **Prevents:** an unbalanced `account.move`; treating placeholder GL numbers as fixed.
 - **Rule:** every employer-cost debit has a matching payable credit; total debit ≡ total credit by the
@@ -190,6 +207,7 @@ flowchart TD
   mapped to the company chart at onboarding — not requirements.
 
 ### AD-11 — Layer boundaries + dependency direction `[ADOPTED]`
+
 - **Binds:** module package layout (see diagram above).
 - **Prevents:** a report recomputing tax (a second source of truth); the localization layer depending
   on application/report code.
@@ -197,6 +215,7 @@ flowchart TD
   only — they never compute a statutory amount. Localization never imports Application or Reports.
 
 ### AD-12 — Money & rounding discipline `[ADOPTED]`
+
 - **Binds:** tax/premium rule outputs, `compute_tax`, `lookup_loonbelasting`, the journal, and the
   declaration reports.
 - **Prevents:** accumulated rounding drift; toeslagen mis-modeled as taxable-income reductions; a
@@ -212,6 +231,7 @@ flowchart TD
   values.
 
 ### AD-13 — Statutory defaults applied unconditionally `[ASSUMPTION]`
+
 - **Binds:** verwervingskosten forfeit and basiskorting.
 - **Prevents:** an inconsistent baseline across employees; a basiskorting double-count.
 - **Rule:** verwervingskosten (XCG 41.67/mo — the statutory forfeit, max XCG 500/yr) and basiskorting
@@ -235,6 +255,7 @@ flowchart TD
   point.
 
 ### AD-14 — Canonical premium-base derivation `[ADOPTED]`
+
 - **Binds:** all premium income-base rules (`BVZ_PREM_INC`, `AOV_PREM_INC`).
 - **Prevents:** BVZ and AOV diverging on whether overtime is in the base.
 - **Rule:** premium bases derive from `categories.BASIC + categories.ALW` (**overtime included** via
@@ -245,6 +266,7 @@ flowchart TD
   question.
 
 ### AD-15 — Scoped presentation theming `[ADOPTED]`
+
 - **Binds:** all module views/reports and the `cw_theme_prl10n` SCSS.
 - **Prevents:** the theme leaking onto Odoo's own/inherited pages — one developer scoping correctly
   while another applies the wrapper to an inherited `hr.employee`/`hr.contract` view and restyles
@@ -258,6 +280,7 @@ flowchart TD
   dependency: the `cw_theme` module.) Theming is presentation — it computes no statutory amount (AD-11).
 
 ### AD-16 — Senior-only payslip-distribution gate `[ADOPTED]`
+
 - **Binds:** the payslip-distribution action on `hr.payslip.run` and the security groups.
 - **Prevents:** payslips reaching employees before the run is final and verified — e.g. distribution
   while a reopen/correction is still possible, or by a non-senior user.
@@ -269,6 +292,7 @@ flowchart TD
   the medium.
 
 ### AD-17 — Canonical effective date for dated lookups `[ADOPTED]`
+
 - **Binds:** every dated-rate / bracket lookup, every `compute_tax` call, and every
   `lookup_loonbelasting` call in the calculation.
 - **Prevents:** rules within one payslip reading rates from different effective dates; a historical
@@ -280,6 +304,7 @@ flowchart TD
   AD-20's append-only dated records).
 
 ### AD-18 — Fail loud on missing statutory data `[ADOPTED]`
+
 - **Binds:** `compute_tax`, `lookup_loonbelasting`, and any required dated-rate lookup.
 - **Prevents:** a missing rate/bracket/table silently yielding 0 → wrong, zero statutory tax/premium.
 - **Rule:** if a **required** statutory rate, bracket, scale, or loonbelasting table entry is absent
@@ -289,6 +314,7 @@ flowchart TD
   silently.
 
 ### AD-19 — Company scoping (multi-company-safe) `[ADOPTED]`
+
 - **Binds:** every model's company scope and its record rules.
 - **Prevents:** national rates being duplicated or diverging per company; operational payroll data
   leaking across companies.
@@ -301,6 +327,7 @@ flowchart TD
   question (kept cheap and safe by this scoping either way).
 
 ### AD-20 — Loonbelasting table model `[ADOPTED]` (2026-06-27)
+
 - **Binds:** LOONBEL_RAW (Seq 90) and any future period-specific payroll rule.
 - **Prevents:** using the Schijventarief (the annual *inkomstenbelasting* bracket table) as the
   loonbelasting withholding instrument — which is conceptually wrong; employers must use the published
@@ -361,6 +388,7 @@ flowchart TD
     `quincena`, `kwartaal`) are deferred to v1.1R when those pay periods are supported.
 
 ### AD-21 — Bijzondere beloningen tarief `[ADOPTED]` (2026-06-27)
+
 - **Binds:** the EXTRA_TAX rule and the per-(employee, year) bijzondere-beloningen tarief record.
 - **Prevents:** divergent or non-reproducible withholding on bijzondere beloningen — two implementors
   computing the rate from different bases, recomputing the freeze differently on reopen, or taxing the
@@ -450,6 +478,7 @@ flowchart TD
   employee's *Aangifte Inkomstenbelasting* (Belastingdienst), per the source.
 
 ### AD-22 — Per-year SVB parameter table `[ADOPTED]` (2026-06-27)
+
 - **Binds:** every SVB premium rule (AOV/AWW employee, employer, and 1 % surcharge; BVZ employee and
   employer; AVBZ employee and employer; ZV; OV) and all SVB rates, surcharge, and ceilings.
 - **Prevents:** the H-2 divergence — a shared statutory ceiling stored in several `tax_type` records
@@ -497,6 +526,7 @@ flowchart TD
     annualisation, not cumulative** (an AD-4 exception, like the period-specific loonbelasting table).
 
 ### AD-23 — Lei di Bion exempt overtime `[ADOPTED]` (2026-06-27)
+
 - **Binds:** the Lei di Bion exempt-overtime component, the rules that build `TAX_INC` (Seq 80) and the
   premium bases (`BVZ_PREM_INC` Seq 20, `AOV_PREM_INC` Seq 50), and the approval gate.
 - **Prevents:** exempt overtime being taxed or premium-charged; *and* the exemption being claimed
@@ -528,6 +558,7 @@ flowchart TD
     exempt: bijzondere 9.75 % → **273.37 net**.
 
 ### AD-24 — Cumulative annual-maximum premiums `[ADOPTED]` (2026-06-27)
+
 - **Binds:** every SVB premium rule with an **annual** ceiling — AOV/AWW (employee, employer, 1 %
   surcharge), BVZ (employee, employer), AVBZ (employee, employer).
 - **Prevents:** the per-month ×12 annualisation (AD-4) mis-firing at the ceiling when income is
