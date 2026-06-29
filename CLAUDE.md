@@ -53,7 +53,7 @@ No blocking questions remain for v1.0R. The other open questions (OQ-01..OQ-10) 
 
 ## Markdown output conventions
 
-When generating Markdown deliverables (e.g. `_bmad-output/planning-artifacts/epics.md` and other planning/output docs), follow these rules so they convert cleanly to Word via pandoc:
+When generating Markdown deliverables (e.g. `_bmad-output/planning-artifacts/Odoo Module Design Epics - EN - v1.0D.md` and other planning/output docs), follow these rules so they convert cleanly to Word via pandoc:
 
 - **No horizontal-rule separators** (`---`, `***`, `___`) in the document body. *Exception:* a leading YAML frontmatter block delimited by `---` is allowed where a tool requires it (e.g. BMad `stepsCompleted` / `inputDocuments`).
 - **Headings: at most 3 levels, and the heading structure starts at Heading 1** (`#` → `##` → `###`; never deeper).

@@ -5,7 +5,7 @@ inputDocuments:
   - '_bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/ARCHITECTURE-SPINE.md'
   - 'docs/tech_design_l10n_cw_hr_payroll_v3.0D.txt'
   - 'docs/design/cw-vacation-accrual-v1.1R.md'
-translationOf: 'epics.md'
+translationOf: 'Odoo Module Design Epics - EN - v1.0D.md'
 language: 'nl'
 ---
 
