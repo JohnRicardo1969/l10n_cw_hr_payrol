@@ -4,6 +4,7 @@ inputDocuments:
   - 'docs/prd/PRD - v3.0D.md'
   - '_bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/ARCHITECTURE-SPINE.md'
   - 'docs/tech_design_l10n_cw_hr_payroll_v3.0D.txt'
+  - 'docs/design/cw-vacation-accrual-v1.1R.md'
 ---
 
 ::: {custom-style="Title"}
@@ -75,6 +76,14 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 **Payslip distribution**
 
 - FR030: Distribute payslips to employees as a separate, explicit action restricted to the most senior existing role, the Payroll Manager (`group_l10n_cw_payroll_manager`), allowed only after run close and an explicit "no restore needed" confirmation. Closing a run does not distribute. The send channel (email / Employee Portal / app) is deferred (OQ-01).
+
+### Vacation accrual (v1.1R)
+
+- FR032: Provide a Curaçao statutory vacation leave type (`hr.leave.type`) and seed the CW public-holiday calendar as `resource.calendar.leaves`, so public holidays are separate paid free days and never deducted from vacation balance.
+- FR033: Compute the annual statutory vacation entitlement as `min(workdays_per_week, 5) × 3` days, reading the contracted days per week from the employee's `resource.calendar` (not hours/FTE).
+- FR034: Grant the yearly vacation allocation on 1 January and prorate it for mid-year starts, using the basis resolved by OQ-11.
+- FR035: Enforce the carryover cap at `6 × workdays_per_week`, lapse excess days, and superannuate prior-year rights after long absence (sickness ≥ 6 months or legal obligations ≥ 6 weeks). The take-window (3 vs 6 months) is resolved by OQ-12.
+- FR036: Payout unused statutory vacation days on termination at the statutory day-wage (`monthly_wage × 3 / 65` for 5-day week, `× 3 / 78` for 6-day week), rounding part-days up.
 
 ### NonFunctional Requirements
 
@@ -165,6 +174,11 @@ The module uses Odoo's standard screens (list/form/menu views), with a custom sc
 - FR029: Epic 1 — Contract start (required) and end (optional) dates.
 - FR030: Epic 3 — Senior-only payslip distribution after close.
 - FR031: Epic 1 — Manager CSV upload of the lb-maandtabel (annual + mid-year correction).
+- FR032: Epic 5 — Seed CW vacation leave type and public-holiday calendar.
+- FR033: Epic 5 — Compute yearly entitlement from `resource.calendar` days/week.
+- FR034: Epic 5 — Grant yearly allocation on 1 January and prorate mid-year starts.
+- FR035: Epic 5 — Carryover cap, lapse excess, and superannuate after long absence.
+- FR036: Epic 5 — Termination payout of unused statutory days at day-wage.
 
 ## Epic List
 
@@ -186,6 +200,11 @@ A payroll manager runs the full monthly cycle: generate the batch (automatically
 ### Epic 4: Statutory Reports
 Each closed run produces the official Curaçao documents and filings: the payslip PDF (A-01), the monthly wage-tax return (B-01) and SVB premium return (B-02) in whole XCG, and the balanced journal-entry summary (B-05).
 **FRs covered:** FR023, FR024, FR025
+
+### Epic 5: Statutory Vacation Accrual & Balance (v1.1R)
+A payroll manager can track Curaçao statutory paid vacation for each employee: yearly entitlement based on contracted days per week, prorated first-year grants, deduction when leave is taken, carryover cap and lapse, and payout of unused days on termination. Built on native `hr_holidays` with a thin CW localization layer; full design in `docs/design/cw-vacation-accrual-v1.1R.md`.
+**FRs covered:** FR032, FR033, FR034, FR035, FR036
+**ARs:** AR014 (seed data), AR015 (seed data), AR023 (schema-migration discipline), AR024 (dated data selection is not used here; entitlement is computed from `resource.calendar`)
 
 ## Epic 1: Module Foundation, Configuration & Security
 
@@ -322,6 +341,72 @@ So that cumulative premiums can be read and the close action can write totals la
 - **Given** company scoping, **Then** the YTD model is company-scoped via `company_id`. (AR022)
 - **Given** v1.0R, **Then** no writes occur here yet — writes happen only at run close (Epic 3) and reads happen in the calculation engine (Epic 2). (AR010)
 - **Given** the module's own view, **Then** it carries the `.cw_theme_prl10n` wrapper. (UX-DR002)
+
+## Epic 5: Statutory Vacation Accrual & Balance (v1.1R)
+
+A payroll manager can track Curaçao statutory paid vacation for each employee: yearly entitlement based on contracted days per week, prorated first-year grants, deduction when leave is taken, carryover cap and lapse, and payout of unused days on termination. Built on native `hr_holidays` with a thin CW localization layer; full design in `docs/design/cw-vacation-accrual-v1.1R.md`.
+
+### Story 5.1: Seed CW vacation leave type and public holidays
+
+As a payroll admin,
+I want the Curaçao statutory vacation leave type and the CW public-holiday calendar seeded on install,
+So that public holidays are separate paid free days and never deducted from vacation balance.
+
+**Acceptance Criteria:**
+
+- **Given** module install, **Then** an `hr.leave.type` record `Wettelijke Vakantie (CW)` (`CWVAC`) exists, allocation-required, with day unit and manager validation. (FR032)
+- **Given** the seeded public-holiday calendar, **Then** CW public holidays are created as `resource.calendar.leaves` (global time off). (FR032)
+- **Given** a leave request spanning a public holiday, **When** it is approved, **Then** the holiday days are not deducted from the vacation balance. (FR032)
+
+### Story 5.2: Compute yearly entitlement from working schedule
+
+As a payroll manager,
+I want the yearly vacation entitlement computed from the employee's contracted days per week,
+So that the statutory grant is correct for full-time, part-time, and 6-day-week employees.
+
+**Acceptance Criteria:**
+
+- **Given** an employee with a 5-day `resource.calendar`, **When** the annual entitlement is computed, **Then** it equals 15 days. (FR033)
+- **Given** a 6-day calendar, **When** the entitlement is computed, **Then** it equals 15 days (capped at 5 days/week), not 18. (FR033)
+- **Given** a 4-day calendar, **When** the entitlement is computed, **Then** it equals 12 days. (FR033)
+- **Given** a 20-hour/week employee spread over 5 days, **When** the entitlement is computed, **Then** it equals 15 days (hours do not reduce the count). (FR033)
+
+### Story 5.3: Grant yearly allocation and prorate mid-year starts
+
+As a payroll manager,
+I want the vacation allocation granted each year on 1 January and prorated for new hires,
+So that every employee receives the correct statutory days without manual entry.
+
+**Acceptance Criteria:**
+
+- **Given** an active employee at year start, **When** the scheduled action runs on 1 January, **Then** an `hr.leave.allocation` is created for the full yearly entitlement. (FR034)
+- **Given** an employee who starts on 1 July, **When** the first grant runs, **Then** the allocation is prorated per the basis resolved by OQ-11. (FR034)
+- **Given** an existing allocation for the year, **When** the scheduled action runs again, **Then** it updates rather than duplicates the allocation. (FR034)
+
+### Story 5.4: Carryover cap and lapse on long absence
+
+As a payroll manager,
+I want accumulated vacation capped, excess days lapsed, and prior-year rights superannuated after long absence,
+So that the balance always reflects the statutory maximum and legal superannuation rules.
+
+**Acceptance Criteria:**
+
+- **Given** a 5-day employee with a carried-forward balance, **When** the carryover cap is enforced, **Then** the total balance is capped at 30 days (`6 × 5`). (FR035)
+- **Given** a balance above the cap, **When** the cap is enforced, **Then** excess days are lapsed and recorded. (FR035)
+- **Given** an employee absent ≥ 6 months due to sickness in a year, **When** the year ends, **Then** prior-year vacation rights for that year superannuate. (FR035)
+- **Given** an employee absent ≥ 6 weeks due to legal obligations in a year, **When** the year ends, **Then** prior-year vacation rights for that year superannuate. (FR035)
+
+### Story 5.5: Payout unused vacation days on termination
+
+As a payroll manager,
+I want unused statutory vacation days paid out on termination at the statutory day-wage,
+So that the final settlement complies with the Vakantieregeling 1949.
+
+**Acceptance Criteria:**
+
+- **Given** a 5-day employee with 5 unused statutory days and monthly wage XCG 3,250, **When** a final settlement is processed, **Then** `VAC_PAYOUT` = `3,250 × 3 / 65 × 5` = XCG 750.00. (FR036)
+- **Given** a 6-day employee with the same wage and days, **When** the payout is computed, **Then** it uses `× 3 / 78`. (FR036)
+- **Given** a partial day owed, **When** the payout is computed, **Then** it rounds up to a whole day. (FR036)
 
 # Definitions
 

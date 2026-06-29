@@ -4,6 +4,7 @@ inputDocuments:
   - 'docs/prd/PRD - v3.0D.md'
   - '_bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/ARCHITECTURE-SPINE.md'
   - 'docs/tech_design_l10n_cw_hr_payroll_v3.0D.txt'
+  - 'docs/design/cw-vacation-accrual-v1.1R.md'
 translationOf: 'epics.md'
 language: 'nl'
 ---
@@ -79,6 +80,14 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 - FR030: Distribueer loonstroken naar medewerkers als een afzonderlijke, expliciete actie die beperkt is tot de meest senior bestaande rol, de Salarisbeheerder (`group_l10n_cw_payroll_manager`), alleen toegestaan na het afsluiten van de run en een expliciete bevestiging "geen restore nodig". Het afsluiten van een run distribueert niet. Het verzendkanaal (e-mail / Medewerkersportaal / app) is uitgesteld (OQ-01).
 - FR031: Sta de Salarisbeheerder toe een Belastingdienst lb-maandtabel te uploaden door een CSV-bestand te importeren in `hr.loonbelasting.tabel` / `hr.loonbelasting.tabel.lijn` via de standaard Odoo-importactie. Dit dekt twee scenario's: (a) **Jaarlijkse upload** — vóór de eerste run van elk nieuw jaar de nieuwe tabel uploaden; is die nog niet beschikbaar, dan wordt de tabel van het vorige jaar (met open `valid_to`) automatisch gebruikt totdat de nieuwe tabel arriveert. (b) **Correctie gedurende het jaar** — publiceert de Belastingdienst een gecorrigeerde tabel voor het lopende jaar, dan wordt die als nieuw koptekstrecord voor hetzelfde jaar geüpload. Het systeem selecteert automatisch de juiste versie per loonstrook: de actieve tabel met `valid_from ≤ payslip.date_to`, gesorteerd op meest recente `valid_from` eerst en bij gelijke `valid_from` op de volgorde van upload (meest recentste upload wint). Herberekening van eerder afgesloten loonstroken pakt de gecorrigeerde tabel automatisch op. Vervangen tabelrecords worden bewaard voor audit.
+
+### Vakantieopbouw (v1.1R)
+
+- FR032: Lever een Curaçaose wettelijke vakantieverlofsoort (`hr.leave.type`) en seed de CW feestdagencalendar als `resource.calendar.leaves`, zodat feestdagen aparte betaalde vrije dagen zijn en nooit van het vakantiesaldo worden afgetrokken.
+- FR033: Bereken het jaarlijkse wettelijke vakantierecht als `min(werkdagen_per_week, 5) × 3` dagen, afgeleid van het `resource.calendar` van de medewerker (niet uren/FTE).
+- FR034: Ken het jaarlijkse vakantieverlof toe op 1 januari en verdeel het rato voor medewerkers die gedurende het jaar in dienst treden, op basis van het besluit bij OQ-11.
+- FR035: Handhaaf de overdrachtslimiet op `6 × werkdagen_per_week`, laat overtollige dagen vervallen en doe voorafgaande rechten verjaren na langdurig verzuim (ziekte ≥ 6 maanden of wettelijke verplichtingen ≥ 6 weken). Het opnamevenster (3 vs 6 maanden) wordt beslist bij OQ-12.
+- FR036: Betaal ongebruikte wettelijke vakantiedagen uit bij beëindiging tegen de wettelijke dagloon (`maandloon × 3 / 65` bij 5-daagse week, `× 3 / 78` bij 6-daagse week), waarbij gedeelde dagen naar boven worden afgerond.
 
 ### Niet-functionele eisen
 
@@ -169,6 +178,11 @@ De module gebruikt de standaardschermen van Odoo (lijst-/formulier-/menuweergave
 - FR029: Epic 1 — Contractstartdatum (verplicht) en einddatum (optioneel).
 - FR030: Epic 3 — Distributie loonstroken alleen voor senior, na afsluiten.
 - FR031: Epic 1 — Manager CSV-upload van de lb-maandtabel (jaarlijks + tussentijdse correctie).
+- FR032: Epic 5 — Seed CW vakantieverlofsoort en feestdagencalendar.
+- FR033: Epic 5 — Bereken jaarrechten uit `resource.calendar`-werkdagen/week.
+- FR034: Epic 5 — Ken jaarlijkse toewijzing toe op 1 januari en rato bij tussentijdse indiensttreding.
+- FR035: Epic 5 — Overdrachtslimiet, vervallen overschot en verjaring na langdurig verzuim.
+- FR036: Epic 5 — Uitbetaling ongebruikte wettelijke dagen bij beëindiging tegen dagloon.
 
 ## Epic-lijst
 
@@ -190,6 +204,11 @@ Een salarisadministratie-manager draait de volledige maandcyclus: genereer de ba
 ### Epic 4: Wettelijke Rapporten
 Elke afgesloten run produceert de officiële Curaçaose documenten en aangiften: de loonstrook-PDF (A-01), de maandelijkse loonbelastingaangifte (B-01) en SVB-premieaangifte (B-02) in hele XCG, en het sluitende journaalpost-overzicht (B-05).
 **Gedekte FR's:** FR023, FR024, FR025
+
+### Epic 5: Wettelijke Vakantieopbouw & Saldo (v1.1R)
+Een salarisadministrateur-manager kan het Curaçaose wettelijke betaalde vakantieverlof per medewerker volgen: jaarrechten gebaseerd op de gecontracteerde werkdagen per week, rato eerste jaar, aftrek bij opname, overdrachtslimiet en verjaring, en uitbetaling van ongebruikte dagen bij beëindiging. Gebouwd op native `hr_holidays` met een dunne CW-lokalisatielaag; volledig ontwerp in `docs/design/cw-vacation-accrual-v1.1R.md`.
+**Gedekte FR's:** FR032, FR033, FR034, FR035, FR036
+**AR's:** AR014 (seed-data), AR015 (seed-data), AR023 (schema-migratiediscipline), AR024 (gedateerde-data-selectie is hier niet van toepassing; recht wordt berekend uit `resource.calendar`)
 
 ## Epic 1: Modulefundament, Configuratie & Beveiliging
 
@@ -326,6 +345,72 @@ zodat cumulatieve premies kunnen worden gelezen en de afsluitactie later totalen
 - **Gegeven** company-scoping, **dan** is het YTD-model company-gescopeerd via `company_id`. (AR022)
 - **Gegeven** v1.0R, **dan** vinden hier nog geen schrijfacties plaats — schrijven gebeurt alleen bij afsluiten van de run (Epic 3) en lezen in de berekeningsengine (Epic 2). (AR010)
 - **Gegeven** de eigen weergave van de module, **dan** draagt deze de `.cw_theme_prl10n`-wrapper. (UX-DR002)
+
+## Epic 5: Wettelijke Vakantieopbouw & Saldo (v1.1R)
+
+Een salarisadministrateur-manager kan het Curaçaose wettelijke betaalde vakantieverlof per medewerker volgen: jaarrechten gebaseerd op de gecontracteerde werkdagen per week, rato eerste jaar, aftrek bij opname, overdrachtslimiet en verjaring, en uitbetaling van ongebruikte dagen bij beëindiging. Gebouwd op native `hr_holidays` met een dunne CW-lokalisatielaag; volledig ontwerp in `docs/design/cw-vacation-accrual-v1.1R.md`.
+
+### Story 5.1: Seed CW vakantieverlofsoort en feestdagen
+
+Als salarisadministrateur,
+wil ik dat de Curaçaose wettelijke vakantieverlofsoort en de CW feestdagencalendar bij installatie worden geseeld,
+zodat feestdagen aparte betaalde vrije dagen zijn en nooit van het vakantiesaldo worden afgetrokken.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een module-installatie, **dan** bestaat er een `hr.leave.type`-record `Wettelijke Vakantie (CW)` (`CWVAC`), toewijzing vereist, met dag als eenheid en manager-validatie. (FR032)
+- **Gegeven** de geseelde feestdagencalendar, **dan** zijn de CW feestdagen aangemaakt als `resource.calendar.leaves` (globaal verlof). (FR032)
+- **Gegeven** een verlofaanvraag die een feestdag beslaat, **wanneer** deze wordt goedgekeurd, **dan** worden de feestdagen niet van het vakantiesaldo afgetrokken. (FR032)
+
+### Story 5.2: Bereken jaarrechten uit werktijdenrooster
+
+Als salarisadministrateur-manager,
+wil ik dat het jaarlijkse vakantierecht wordt berekend uit de gecontracteerde werkdagen per week van de medewerker,
+zodat het wettelijke recht correct is voor voltijds, deeltijds en 6-daagse medewerkers.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een medewerker met een 5-daags `resource.calendar`, **wanneer** het jaarlijkse recht wordt berekend, **dan** is dit 15 dagen. (FR033)
+- **Gegeven** een 6-daags rooster, **wanneer** het recht wordt berekend, **dan** is dit 15 dagen (afgetopt op 5 dagen/week), niet 18. (FR033)
+- **Gegeven** een 4-daags rooster, **wanneer** het recht wordt berekend, **dan** is dit 12 dagen. (FR033)
+- **Gegeven** een medewerker met 20 uur/week verdeeld over 5 dagen, **wanneer** het recht wordt berekend, **dan** is dit 15 dagen (uren verminderen het recht niet). (FR033)
+
+### Story 5.3: Ken jaarlijkse toewijzing toe en rato bij tussentijdse indiensttreding
+
+Als salarisadministrateur-manager,
+wil ik dat het vakantieverlof jaarlijks op 1 januari wordt toegekend en rato wordt verdeeld voor nieuwe medewerkers,
+zodat elke medewerker het correcte wettelijke aantal dagen ontvangt zonder handmatige invoer.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een actieve medewerker bij begin van het jaar, **wanneer** de geplande actie op 1 januari draait, **dan** wordt een `hr.leave.allocation` aangemaakt voor het volledige jaarlijkse recht. (FR034)
+- **Gegeven** een medewerker die op 1 juli in dienst treedt, **wanneer** de eerste toewijzing draait, **dan** is deze rato op basis van het besluit bij OQ-11. (FR034)
+- **Gegeven** een bestaande toewijzing voor het jaar, **wanneer** de geplande actie opnieuw draait, **dan** wordt deze bijgewerkt in plaats van gedupliceerd. (FR034)
+
+### Story 5.4: Overdrachtslimiet en verjaring na langdurig verzuim
+
+Als salarisadministrateur-manager,
+wil ik dat opgebouwde vakantie wordt afgetopt, overtollige dagen vervallen en voorafgaande rechten verjaren na langdurig verzuim,
+zodat het saldo altijd de wettelijke maximum en de verjaringsregels weergeeft.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een 5-daagse medewerker met een meegenomen saldo, **wanneer** de overdrachtslimiet wordt toegepast, **dan** is het totale saldo afgetopt op 30 dagen (`6 × 5`). (FR035)
+- **Gegeven** een saldo boven de limiet, **wanneer** de limiet wordt toegepast, **dan** vervallen de overtollige dagen en worden vastgelegd. (FR035)
+- **Gegeven** een medewerker die in een jaar ≥ 6 maanden ziek is geweest, **wanneer** het jaar eindigt, **dan** verjaren de voorafgaande vakantierechten voor dat jaar. (FR035)
+- **Gegeven** een medewerker die in een jaar ≥ 6 weken wegens wettelijke verplichtingen afwezig is geweest, **wanneer** het jaar eindigt, **dan** verjaren de voorafgaande vakantierechten voor dat jaar. (FR035)
+
+### Story 5.5: Uitbetaling ongebruikte vakantiedagen bij beëindiging
+
+Als salarisadministrateur-manager,
+wil ik dat ongebruikte wettelijke vakantiedagen bij beëindiging worden uitbetaald tegen de wettelijke dagloon,
+zodat de eindafrekening voldoet aan de Vakantieregeling 1949.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een 5-daagse medewerker met 5 ongebruikte wettelijke dagen en een maandloon van XCG 3.250, **wanneer** een eindafrekening wordt verwerkt, **dan** is `VAC_PAYOUT` = `3.250 × 3 / 65 × 5` = XCG 750,00. (FR036)
+- **Gegeven** een 6-daagse medewerker met hetzelfde loon en hetzelfde aantal dagen, **wanneer** de uitbetaling wordt berekend, **dan** wordt `× 3 / 78` gebruikt. (FR036)
+- **Gegeven** een gedeelde dag die verschuldigd is, **wanneer** de uitbetaling wordt berekend, **dan** wordt deze naar boven afgerond naar een hele dag. (FR036)
 
 # Definities
 
