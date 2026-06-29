@@ -187,6 +187,142 @@ A payroll manager runs the full monthly cycle: generate the batch (automatically
 Each closed run produces the official Curaçao documents and filings: the payslip PDF (A-01), the monthly wage-tax return (B-01) and SVB premium return (B-02) in whole XCG, and the balanced journal-entry summary (B-05).
 **FRs covered:** FR023, FR024, FR025
 
+## Epic 1: Module Foundation, Configuration & Security
+
+A payroll admin can install the module, load and maintain all statutory rates and tables, build reusable wage-component sets, assign them to employees, capture employee and contract tax data, and operate under least-privilege roles — everything needed before a payslip is computed.
+
+### Story 1.1: Greenfield module skeleton and manifest
+
+As a payroll admin,
+I want to install the `l10n_cw_hr_payroll` module on Odoo 19 Enterprise,
+So that the Curaçao payroll framework is available without errors.
+
+**Acceptance Criteria:**
+
+- **Given** a clean Odoo 19 Enterprise database with `hr_payroll` installed, **When** I install `l10n_cw_hr_payroll`, **Then** it installs without error and reports version `19.0.0.1.0`, country `cw`, license `OPL-1`, `application=False`, and `auto_install=False`. (AR014)
+- **Given** the manifest, **When** inspected, **Then** `depends` = `hr, hr_contract, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance` with no theme dependency added. (AR014)
+- **Given** the package layout, **When** inspected, **Then** directories follow the three-layer boundaries (Localization ← Application ← Reports) per Tech Design §13. (AR001)
+- **Given** the freshly installed skeleton, **Then** no statutory rate, ceiling, or threshold is hard-coded in Python. (AR006)
+
+### Story 1.2: Scoped theme and Dutch i18n scaffolding
+
+As a payroll admin,
+I want the module's own screens styled with the `cw_theme_prl10n` theme and a Dutch interface,
+So that the module looks consistent and reads in Dutch without altering Odoo's standard pages.
+
+**Acceptance Criteria:**
+
+- **Given** the manifest `assets` entry, **When** the backend loads, **Then** `static/src/scss/cw_theme_prl10n.scss` is bundled into `web.assets_backend` (not the data list). (UX-DR001, AR014)
+- **Given** any theme rule, **Then** it is nested under the `.cw_theme_prl10n` wrapper and applied only to the module's own model screens; extended Odoo views (Employee, Contract, Salary Rule) render unchanged. (UX-DR002)
+- **Given** light and dark mode, **Then** the pastel palette is defined as CSS variables under `:root` and `.o_dark_mode`. (UX-DR003)
+- **Given** `i18n/nl.po`, **Then** the module's UI strings have Dutch translations and statutory terms keep their official form (e.g. `basiskorting`, not `basisaftrek`). (AR016)
+
+### Story 1.3: Security roles and own-payslip record rule
+
+As a system administrator,
+I want four least-privilege roles and an own-payslip record rule,
+So that each user can access only what their role permits.
+
+**Acceptance Criteria:**
+
+- **Given** the security data, **Then** four groups exist: Employee, Payroll User, Payroll Manager, and Accountant. (FR026)
+- **Given** an Employee user, **When** they open payslips, **Then** a record rule limits them to records where `employee_id.user_id = user`. (FR027)
+- **Given** each custom model, **Then** `ir.model.access` entries grant least-privilege CRUD aligned to the four roles.
+- **Given** the most senior existing role is Payroll Manager, **Then** no new group is introduced (the distribution gate reuses `group_l10n_cw_payroll_manager`). (AR019)
+
+### Story 1.4: Dated statutory data models and lookup methods
+
+As a payroll admin,
+I want dated, append-only statutory data models with deterministic lookup methods,
+So that rates and tables are maintained as data and read reproducibly by effective date.
+
+**Acceptance Criteria:**
+
+- **Given** the models, **Then** `hr.svb.parameters` (one per year), `hr.tax.bracket` (dated, `tax_type`-keyed), and `hr.loonbelasting.tabel` (header) + `hr.loonbelasting.tabel.lijn` (rows) exist. (FR017, AR006, AR024)
+- **Given** a `tax_type` and a date, **When** `compute_tax` is called, **Then** it returns the dated Belastingdienst scalar rounded to 2 decimals; `lookup_marginal_rate` returns the single bijzondere band rate; `lookup_loonbelasting` returns the periodic raw loonbelasting. (AR012)
+- **Given** multiple `lb-tabel` headers for a `period_type`+`year`, **When** `lookup_loonbelasting` runs for a date, **Then** it selects active headers with `valid_from ≤ date_to`, ordered by `valid_from` desc then `id` desc. (AR024)
+- **Given** a required record or table missing for the effective date, **Then** a `UserError` is raised (fail-loud), never a silent 0. (AR021)
+- **Given** a superseded value, **Then** it is closed via `valid_to` and never deleted (append-only), and schema changes ship migrations preserving history. (AR023)
+- **Given** national statutory data, **Then** these models are global (no `company_id`). (AR022)
+
+### Story 1.5: Seed 2026 statutory data
+
+As a payroll admin,
+I want the 2026 statutory rates seeded on install,
+So that calculations reconcile to the official 2026 publications out of the box.
+
+**Acceptance Criteria:**
+
+- **Given** module install, **Then** a 2026 `hr.svb.parameters` record is seeded with all SVB premium rates, the AOV surcharge, and the ceilings (BVZ 150,000/yr, AOV/AWW 100,000/yr, AVBZ 606,247.08/yr, ZV/OV 7,146.10/mo). (AR015)
+- **Given** the bijzondere beloningen table, **Then** 6 bands are seeded: 0→9.75%, 43,500→15%, 58,000→23%, 86,900→30%, 123,100→37.5%, 181,000→46.5%. (AR015)
+- **Given** the Belastingdienst scalars, **Then** basiskorting 2,915/yr, verwervingskosten 500/yr, and the toeslagen are seeded as dated `hr.tax.bracket` records with `valid_from = 2026-01-01`. (AR013, AR015)
+- **Given** the seeds, **Then** no rate literal is hard-coded in salary-rule Python. (AR006)
+
+### Story 1.6: Loonbelasting table CSV import and versioning
+
+As a Payroll Manager,
+I want to upload the Belastingdienst lb-maandtabel via CSV,
+So that annual tables and mid-year corrections are maintained without a code deploy.
+
+**Acceptance Criteria:**
+
+- **Given** a CSV, **When** I import it into `hr.loonbelasting.tabel` / `.lijn` via the standard Odoo import action, **Then** a header plus rows are created (one row per `wage_from`, maandtabel step XCG 5.00). (FR031, AR024)
+- **Given** the new year's table is absent at first run, **Then** the prior year's still-open table is used until the new one arrives. (FR031)
+- **Given** a mid-year correction uploaded as a new header for the same year, **Then** the selection rule picks it (latest `valid_from`, then highest `id`) and herberekening on prior periods picks it up automatically. (FR031, AR024)
+- **Given** the 2026 maandtabel seed, **Then** ≈ 3,335 rows are loaded (`period_type = maand`, `valid_from = 2026-01-01`). (AR015)
+- **Given** `TAX_INC` above the table ceiling (XCG 16,670/mo for 2026), **Then** `lookup_loonbelasting` applies `ceiling_tax + 46.5% × excess`. (AR024)
+
+### Story 1.7: Three-tier wage-component model
+
+As a payroll admin,
+I want the Tier 2 set and Tier 3 employee wage-line models with views,
+So that I can define reusable component templates and per-employee wage lines.
+
+**Acceptance Criteria:**
+
+- **Given** the models, **Then** `hr.wage.component.set` (+ set line) and `hr.employee.wage.line` exist with list/form/menu views under the Dutch menu (Salarisadministratie → Configuratie). (FR015)
+- **Given** a Tier 3 wage line, **Then** it carries `enabled` and `active` flags and a `salary_rule_id` link. (AR007, AR008)
+- **Given** the never-gate base rules, **Then** the model design supports them always running regardless of `enabled`. (AR007)
+- **Given** the module's own views, **Then** they carry the `.cw_theme_prl10n` wrapper. (UX-DR002)
+
+### Story 1.8: Apply wizard for wage-component sets
+
+As a payroll admin,
+I want to apply a Tier 2 set to one or more employees,
+So that independent Tier 3 wage lines are created without later coupling.
+
+**Acceptance Criteria:**
+
+- **Given** a set and selected employees, **When** I run the apply wizard, **Then** independent Tier 3 `hr.employee.wage.line` records are created as a one-time copy. (FR016, AR009)
+- **Given** a later edit to the set, **Then** existing Tier 3 lines do not change. (AR009)
+- **Given** a created Tier 3 line, **Then** `salary_rule_id` is read-only. (AR009)
+
+### Story 1.9: Employee and contract statutory fields
+
+As a payroll admin,
+I want tax and contract fields on the employee and contract,
+So that per-employee statutory inputs and the contract period are captured.
+
+**Acceptance Criteria:**
+
+- **Given** `hr.employee`, **Then** the tax-credit fields (alleenverdieners-, kinder-, ouderentoeslag) and the beschikking input exist. (FR019)
+- **Given** `hr.contract`, **Then** an OV% (gevarenklasse) field exists as an interim Float. (FR019)
+- **Given** `hr.contract`, **Then** a required start date and an optional end date exist; permanent contracts with no end date are allowed. (FR029)
+- **Given** these are extended Odoo views, **Then** the `.cw_theme_prl10n` wrapper is NOT applied. (UX-DR002)
+
+### Story 1.10: Year-to-date totals model
+
+As a payroll admin,
+I want the year-to-date totals model in place,
+So that cumulative premiums can be read and the close action can write totals later.
+
+**Acceptance Criteria:**
+
+- **Given** the model, **Then** `hr.wage.component.ytd` exists keyed per employee, component, and year, with `ytd_amount`, `last_updated`, and `last_payslip_id`. (FR018)
+- **Given** company scoping, **Then** the YTD model is company-scoped via `company_id`. (AR022)
+- **Given** v1.0R, **Then** no writes occur here yet — writes happen only at run close (Epic 3) and reads happen in the calculation engine (Epic 2). (AR010)
+- **Given** the module's own view, **Then** it carries the `.cw_theme_prl10n` wrapper. (UX-DR002)
+
 # Definitions
 
 ## Abbreviations

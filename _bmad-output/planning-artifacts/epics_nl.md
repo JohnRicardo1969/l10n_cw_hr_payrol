@@ -191,6 +191,142 @@ Een salarisadministratie-manager draait de volledige maandcyclus: genereer de ba
 Elke afgesloten run produceert de officiële Curaçaose documenten en aangiften: de loonstrook-PDF (A-01), de maandelijkse loonbelastingaangifte (B-01) en SVB-premieaangifte (B-02) in hele XCG, en het sluitende journaalpost-overzicht (B-05).
 **Gedekte FR's:** FR023, FR024, FR025
 
+## Epic 1: Modulefundament, Configuratie & Beveiliging
+
+Een salarisadministrateur kan de module installeren, alle wettelijke tarieven en tabellen laden en onderhouden, herbruikbare looncomponentsets opbouwen, ze aan medewerkers toewijzen, fiscale gegevens van medewerker en contract vastleggen, en werken onder least-privilege rollen — alles wat nodig is voordat een loonstrook wordt berekend.
+
+### Story 1.1: Greenfield moduleskelet en manifest
+
+Als salarisadministrateur,
+wil ik de module `l10n_cw_hr_payroll` installeren op Odoo 19 Enterprise,
+zodat het Curaçaose payroll-raamwerk zonder fouten beschikbaar is.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een schone Odoo 19 Enterprise-database met `hr_payroll` geïnstalleerd, **wanneer** ik `l10n_cw_hr_payroll` installeer, **dan** installeert deze zonder fout en meldt versie `19.0.0.1.0`, land `cw`, licentie `OPL-1`, `application=False` en `auto_install=False`. (AR014)
+- **Gegeven** het manifest, **wanneer** geïnspecteerd, **dan** is `depends` = `hr, hr_contract, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance` zonder toegevoegde thema-afhankelijkheid. (AR014)
+- **Gegeven** de package-indeling, **wanneer** geïnspecteerd, **dan** volgen de mappen de drie-lagen-grenzen (Localization ← Application ← Reports) volgens Tech Design §13. (AR001)
+- **Gegeven** het pas geïnstalleerde skelet, **dan** is geen enkel wettelijk tarief, plafond of drempel hard gecodeerd in Python. (AR006)
+
+### Story 1.2: Gescopeerd thema en Nederlandse i18n-opzet
+
+Als salarisadministrateur,
+wil ik dat de eigen schermen van de module gestyled zijn met het `cw_theme_prl10n`-thema en een Nederlandse interface,
+zodat de module consistent oogt en in het Nederlands leest zonder Odoo's standaardpagina's te wijzigen.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de manifest-`assets`-vermelding, **wanneer** de backend laadt, **dan** wordt `static/src/scss/cw_theme_prl10n.scss` gebundeld in `web.assets_backend` (niet de data-lijst). (UX-DR001, AR014)
+- **Gegeven** elke themaregel, **dan** is deze genest onder de `.cw_theme_prl10n`-wrapper en alleen toegepast op de eigen modelschermen van de module; uitgebreide Odoo-weergaven (Medewerker, Contract, Salarisregel) blijven ongewijzigd. (UX-DR002)
+- **Gegeven** lichte en donkere modus, **dan** is het pastelpalet gedefinieerd als CSS-variabelen onder `:root` en `.o_dark_mode`. (UX-DR003)
+- **Gegeven** `i18n/nl.po`, **dan** hebben de UI-teksten van de module Nederlandse vertalingen en behouden wettelijke termen hun officiële vorm (bijv. `basiskorting`, niet `basisaftrek`). (AR016)
+
+### Story 1.3: Beveiligingsrollen en eigen-loonstrook record rule
+
+Als systeembeheerder,
+wil ik vier least-privilege rollen en een eigen-loonstrook record rule,
+zodat elke gebruiker alleen toegang heeft tot wat zijn rol toestaat.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de beveiligingsdata, **dan** bestaan er vier groepen: Medewerker, Payroll-gebruiker, Payroll-manager en Accountant. (FR026)
+- **Gegeven** een Medewerker-gebruiker, **wanneer** deze loonstroken opent, **dan** beperkt een record rule hem tot records waar `employee_id.user_id = user`. (FR027)
+- **Gegeven** elk custom model, **dan** verlenen `ir.model.access`-vermeldingen least-privilege CRUD afgestemd op de vier rollen.
+- **Gegeven** dat de meest senior bestaande rol Payroll-manager is, **dan** wordt geen nieuwe groep geïntroduceerd (de distributiepoort hergebruikt `group_l10n_cw_payroll_manager`). (AR019)
+
+### Story 1.4: Gedateerde wettelijke gegevensmodellen en opzoekmethoden
+
+Als salarisadministrateur,
+wil ik gedateerde, append-only wettelijke gegevensmodellen met deterministische opzoekmethoden,
+zodat tarieven en tabellen als data worden onderhouden en reproduceerbaar per ingangsdatum worden gelezen.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de modellen, **dan** bestaan `hr.svb.parameters` (één per jaar), `hr.tax.bracket` (gedateerd, `tax_type`-gesleuteld), en `hr.loonbelasting.tabel` (header) + `hr.loonbelasting.tabel.lijn` (regels). (FR017, AR006, AR024)
+- **Gegeven** een `tax_type` en een datum, **wanneer** `compute_tax` wordt aangeroepen, **dan** retourneert deze de gedateerde Belastingdienst-scalar afgerond op 2 decimalen; `lookup_marginal_rate` retourneert het enkele bijzondere-bandtarief; `lookup_loonbelasting` retourneert de periodieke ruwe loonbelasting. (AR012)
+- **Gegeven** meerdere `lb-tabel`-headers voor een `period_type`+`year`, **wanneer** `lookup_loonbelasting` voor een datum draait, **dan** selecteert deze actieve headers met `valid_from ≤ date_to`, geordend op `valid_from` aflopend en dan `id` aflopend. (AR024)
+- **Gegeven** een vereist record of tabel die ontbreekt voor de ingangsdatum, **dan** wordt een `UserError` opgeworpen (fail-loud), nooit een stille 0. (AR021)
+- **Gegeven** een vervangen waarde, **dan** wordt deze gesloten via `valid_to` en nooit verwijderd (append-only), en schemawijzigingen leveren migraties die historie behouden. (AR023)
+- **Gegeven** nationale wettelijke data, **dan** zijn deze modellen globaal (geen `company_id`). (AR022)
+
+### Story 1.5: Seed 2026 wettelijke data
+
+Als salarisadministrateur,
+wil ik dat de 2026 wettelijke tarieven bij installatie worden geseed,
+zodat berekeningen meteen aansluiten op de officiële 2026-publicaties.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** module-installatie, **dan** wordt een 2026 `hr.svb.parameters`-record geseed met alle SVB-premietarieven, de AOV-opslag en de plafonds (BVZ 150.000/jr, AOV/AWW 100.000/jr, AVBZ 606.247,08/jr, ZV/OV 7.146,10/mnd). (AR015)
+- **Gegeven** de bijzondere beloningen-tabel, **dan** worden 6 banden geseed: 0→9,75%, 43.500→15%, 58.000→23%, 86.900→30%, 123.100→37,5%, 181.000→46,5%. (AR015)
+- **Gegeven** de Belastingdienst-scalars, **dan** worden basiskorting 2.915/jr, verwervingskosten 500/jr en de toeslagen geseed als gedateerde `hr.tax.bracket`-records met `valid_from = 2026-01-01`. (AR013, AR015)
+- **Gegeven** de seeds, **dan** is geen tariefliteral hard gecodeerd in salarisregel-Python. (AR006)
+
+### Story 1.6: Loonbelastingtabel CSV-import en versiebeheer
+
+Als Payroll-manager,
+wil ik de Belastingdienst lb-maandtabel via CSV uploaden,
+zodat jaartabellen en tussentijdse correcties zonder code-deploy worden onderhouden.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een CSV, **wanneer** ik deze importeer in `hr.loonbelasting.tabel` / `.lijn` via de standaard Odoo-importactie, **dan** worden een header plus regels aangemaakt (één regel per `wage_from`, maandtabelstap XCG 5,00). (FR031, AR024)
+- **Gegeven** dat de tabel van het nieuwe jaar ontbreekt bij de eerste run, **dan** wordt de nog-open tabel van het voorgaande jaar gebruikt totdat de nieuwe arriveert. (FR031)
+- **Gegeven** een tussentijdse correctie geüpload als een nieuwe header voor hetzelfde jaar, **dan** kiest de selectieregel deze (laatste `valid_from`, dan hoogste `id`) en herberekening op eerdere periodes pikt deze automatisch op. (FR031, AR024)
+- **Gegeven** de 2026-maandtabelseed, **dan** worden ≈ 3.335 regels geladen (`period_type = maand`, `valid_from = 2026-01-01`). (AR015)
+- **Gegeven** `TAX_INC` boven het tabelplafond (XCG 16.670/mnd voor 2026), **dan** past `lookup_loonbelasting` `plafondbelasting + 46,5% × overschot` toe. (AR024)
+
+### Story 1.7: Drie-lagen looncomponentmodel
+
+Als salarisadministrateur,
+wil ik de Tier 2-set- en Tier 3-medewerkerloonregelmodellen met weergaven,
+zodat ik herbruikbare componentsjablonen en per-medewerker loonregels kan definiëren.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de modellen, **dan** bestaan `hr.wage.component.set` (+ setregel) en `hr.employee.wage.line` met lijst-/formulier-/menuweergaven onder het Nederlandse menu (Salarisadministratie → Configuratie). (FR015)
+- **Gegeven** een Tier 3-loonregel, **dan** draagt deze `enabled`- en `active`-vlaggen en een `salary_rule_id`-koppeling. (AR007, AR008)
+- **Gegeven** de never-gate basisregels, **dan** ondersteunt het modelontwerp dat ze altijd draaien ongeacht `enabled`. (AR007)
+- **Gegeven** de eigen weergaven van de module, **dan** dragen ze de `.cw_theme_prl10n`-wrapper. (UX-DR002)
+
+### Story 1.8: Toepaswizard voor looncomponentsets
+
+Als salarisadministrateur,
+wil ik een Tier 2-set op één of meer medewerkers toepassen,
+zodat onafhankelijke Tier 3-loonregels worden aangemaakt zonder latere koppeling.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een set en geselecteerde medewerkers, **wanneer** ik de toepaswizard draai, **dan** worden onafhankelijke Tier 3 `hr.employee.wage.line`-records aangemaakt als eenmalige kopie. (FR016, AR009)
+- **Gegeven** een latere wijziging aan de set, **dan** wijzigen bestaande Tier 3-regels niet. (AR009)
+- **Gegeven** een aangemaakte Tier 3-regel, **dan** is `salary_rule_id` alleen-lezen. (AR009)
+
+### Story 1.9: Wettelijke velden voor medewerker en contract
+
+Als salarisadministrateur,
+wil ik fiscale en contractvelden op de medewerker en het contract,
+zodat per-medewerker wettelijke invoer en de contractperiode worden vastgelegd.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** `hr.employee`, **dan** bestaan de heffingskortingsvelden (alleenverdieners-, kinder-, ouderentoeslag) en de beschikking-invoer. (FR019)
+- **Gegeven** `hr.contract`, **dan** bestaat een OV%-veld (gevarenklasse) als tijdelijke Float. (FR019)
+- **Gegeven** `hr.contract`, **dan** bestaan een verplichte startdatum en een optionele einddatum; vaste contracten zonder einddatum zijn toegestaan. (FR029)
+- **Gegeven** dat dit uitgebreide Odoo-weergaven zijn, **dan** wordt de `.cw_theme_prl10n`-wrapper NIET toegepast. (UX-DR002)
+
+### Story 1.10: Jaar-tot-datum-totalenmodel
+
+Als salarisadministrateur,
+wil ik dat het jaar-tot-datum-totalenmodel aanwezig is,
+zodat cumulatieve premies kunnen worden gelezen en de afsluitactie later totalen kan schrijven.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** het model, **dan** bestaat `hr.wage.component.ytd` gesleuteld per medewerker, component en jaar, met `ytd_amount`, `last_updated` en `last_payslip_id`. (FR018)
+- **Gegeven** company-scoping, **dan** is het YTD-model company-gescopeerd via `company_id`. (AR022)
+- **Gegeven** v1.0R, **dan** vinden hier nog geen schrijfacties plaats — schrijven gebeurt alleen bij afsluiten van de run (Epic 3) en lezen in de berekeningsengine (Epic 2). (AR010)
+- **Gegeven** de eigen weergave van de module, **dan** draagt deze de `.cw_theme_prl10n`-wrapper. (UX-DR002)
+
 # Definities
 
 ## Afkortingen
