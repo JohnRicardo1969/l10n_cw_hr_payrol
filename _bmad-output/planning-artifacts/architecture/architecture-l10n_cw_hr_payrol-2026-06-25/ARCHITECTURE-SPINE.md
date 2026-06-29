@@ -7,7 +7,7 @@ paradigm: 'Odoo l10n_*_hr_payroll localization module + dated-data-driven sequen
 scope: 'v1.0R monthly Curaçao payroll: statutory salary-rule calculation pipeline, three-tier wage component model, dated-rate storage, run lifecycle/state commit, accounting posting, layer boundaries'
 status: final
 created: '2026-06-25'
-updated: '2026-06-27'
+updated: '2026-06-28'
 binds: []
 sources:
   - 'docs/tech_design_l10n_cw_hr_payroll_v3.0D.txt'
@@ -679,7 +679,9 @@ l10n_cw_hr_payroll/
   models/    # Localization (rule ext, tax bracket, loonbelasting tabel, svb parameters,
              #   contract/employee ext) + Application models
   data/      # CWMONTHLY/CWSTAFF, categories, salary rules, 2026 tax-bracket records,
-             # 2026 SVB parameters record, 2026 lb-maandtabel (~3,335 rows CSV)
+             # 2026 SVB parameters record, 2026 lb-maandtabel (~3,335 rows CSV),
+             # CW public-holiday calendar (resource.calendar.leaves) — seed data for
+             # holiday-overtime classification and v1.1R vacation accrual
   wizard/    # T2 -> T3 apply wizard
   views/     # forms, menus (incl. hr_loonbelasting_tabel_views.xml)
   report/    # QWeb payslip + declarations (read-only)
@@ -718,4 +720,5 @@ l10n_cw_hr_payroll/
 | OQ-05 Final GL account numbers | Per-company mapping at onboarding (v1.1R); AD-10 holds regardless of the numbers. |
 | OQ-07 SVB gevarenklasse model | Interim `l10n_cw_ov_percentage` Float on contract; future Many2one `l10n_cw.svb.industry` (localization layer) once the official list is sourced. |
 | Pay periods beyond monthly; ZV sick pay; loans/garnishments; verzamelloonstaat & jaaropgaaf CSV; e-filing; DGA; Aruba/SXM | Out of scope for v1.0R per PRD roadmap (v1.1R+). Same paradigm; period-specific divisors/tables. |
+| Statutory vacation accrual & balance (Vakantieregeling 1949) | Leave management built on native `hr_holidays`; entitlement is seed/dated data; same salary-rule paradigm; termination payout reuses the deferred final-settlement flow. Full design in `docs/design/cw-vacation-accrual-v1.1R.md`. |
 | Operational envelope (CI/CD, branch testing, upgrades) | Owned by the Odoo.sh platform, not module code; no module-level decision needed. |
