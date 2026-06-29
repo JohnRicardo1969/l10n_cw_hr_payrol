@@ -1,6 +1,9 @@
-# l10n_cw_hr_payroll
-
-## Product Requirements Document — Curaçao Payroll Localization for Odoo 19 Enterprise
+::: {custom-style="Title"}
+l10n_cw_hr_payroll
+:::
+::: {custom-style="Subtitle"}
+Product Requirements Document — Curaçao Payroll Localization for Odoo 19 Enterprise
+:::
 
 | Field | Value |
 |---|---|
@@ -65,6 +68,7 @@ The following are explicitly excluded from the initial release. Items with a tar
 |---|---|---|
 | Bi-weekly, semi-monthly, weekly payroll | v1.0R is monthly only; other periods need separate tax tables and divisors | v1.1R |
 | ZV sick pay processing | Requires decisions on waiting-period tracking and SVB reimbursement, plus `hr_holidays` integration | v1.1R |
+| Statutory vacation accrual & balance (Vakantieregeling 1949) | Leave management built on native `hr_holidays`; full design in `docs/design/cw-vacation-accrual-v1.1R.md` | v1.1R |
 | Loan deductions and wage garnishments | Requires an application-layer model and a statutory bestaansminimum decision | v1.1R |
 | Verzamelloonstaat CSV export | Statutory annual filing; depends on YTD model and portal spec confirmation | v1.1R |
 | Loonbelastingkaart (jaaropgaaf) | Annual per-employee wage tax statement; depends on YTD model | v1.1R |
@@ -558,6 +562,8 @@ The following items are within scope but require explicit decisions before the a
 | OQ-08 | Loan / garnishment scope | Whether balance tracking is in scope; the current statutory bestaansminimum and how it is stored | v1.1R |
 | OQ-09 | ZV sick pay design | Waiting-period tracking per episode, cross-period handling, SVB reimbursement tracking, above-ceiling pay policy | v1.1R |
 | OQ-10 | Batch payment format (B-09) | Curaçao bank payment file formats to be researched and confirmed | TBD |
+| OQ-11 | Vacation first-year proration basis | Pro-rata by calendar days (`entitlement × days_employed/365`) vs full grant after a qualifying period; see `docs/design/cw-vacation-accrual-v1.1R.md` | v1.1R |
+| OQ-12 | Vacation carryover take-window | Confirm which Curaçao employers qualify as continuous operation (6-month vs 3-month window to take carried-over days); see `docs/design/cw-vacation-accrual-v1.1R.md` | v1.1R |
 
 # Acceptance Criteria
 
@@ -584,7 +590,7 @@ The following must hold before v1.0R is released to production.
 | Version | Contents |
 |---|---|
 | v1.0R | Monthly payroll engine, full statutory sequence (Steps 10–150), three-tier wage component model, loonbelasting + SVB premiums, YTD model, accounting integration, reports A-01/B-01/B-02/B-05, four user groups, Dutch UI translations |
-| v1.1R | Final GL account mapping, verzamelloonstaat CSV (B-04), loonbelastingkaart (B-03), labour cost reports (B-06/B-07), ZV sick pay (B-08), loan deductions and garnishments, additional pay periods, SVB gevarenklasse dropdown |
+| v1.1R | Final GL account mapping, verzamelloonstaat CSV (B-04), loonbelastingkaart (B-03), labour cost reports (B-06/B-07), ZV sick pay (B-08), statutory vacation accrual (Vakantieregeling 1949) on `hr_holidays`, loan deductions and garnishments, additional pay periods, SVB gevarenklasse dropdown |
 | v1.2R | DGA payroll, beschikking multi-year tracking |
 | v2.0R | Electronic filing with Belastingdienst CW, extension to Aruba/Sint Maarten, pension fund integrations |
 
