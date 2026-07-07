@@ -1,5 +1,5 @@
 ---
-stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics']
+stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation']
 inputDocuments:
   - 'docs/prd/PRD - v3.0D.md'
   - '_bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/ARCHITECTURE-SPINE.md'
@@ -304,6 +304,7 @@ zodat ik herbruikbare componentsjablonen en per-medewerker loonregels kan defini
 **Acceptatiecriteria:**
 
 - **Gegeven** de modellen, **dan** bestaan `hr.wage.component.set` (+ setregel) en `hr.employee.wage.line` met lijst-/formulier-/menuweergaven onder het Nederlandse menu (Salarisadministratie → Configuratie). (FR015)
+- **Gegeven** de Tier 1-laag, **dan** draagt `hr.salary.rule` een `singleton`-boolean (standaard `True`) die bepaalt of een looncomponent meer dan eens op dezelfde medewerker mag worden toegepast. (FR015)
 - **Gegeven** een Tier 3-loonregel, **dan** draagt deze `enabled`- en `active`-vlaggen en een `salary_rule_id`-koppeling. (AR007, AR008)
 - **Gegeven** de never-gate basisregels, **dan** ondersteunt het modelontwerp dat ze altijd draaien ongeacht `enabled`. (AR007)
 - **Gegeven** de eigen weergaven van de module, **dan** dragen ze de `.cw_theme_prl10n`-wrapper. (UX-DR002)
@@ -345,6 +346,303 @@ zodat cumulatieve premies kunnen worden gelezen en de afsluitactie later totalen
 - **Gegeven** company-scoping, **dan** is het YTD-model company-gescopeerd via `company_id`. (AR022)
 - **Gegeven** v1.0R, **dan** vinden hier nog geen schrijfacties plaats — schrijven gebeurt alleen bij afsluiten van de run (Epic 3) en lezen in de berekeningsengine (Epic 2). (AR010)
 - **Gegeven** de eigen weergave van de module, **dan** draagt deze de `.cw_theme_prl10n`-wrapper. (UX-DR002)
+
+## Epic 2: Wettelijke Payroll-berekeningsengine
+
+Een correcte maandelijkse loonstrook berekent voor elke representatieve medewerker — standaard, BVZ-vrijgesteld, boven het plafond, en met bijzondere beloningen — overeenkomstig de officiële 2026 Belastingdienst/SVB-publicaties binnen XCG 0,02. Implementeert de geordende salarisregelketen (Seq 10–150) en alle wettelijke componenten, en berekent één loonstrook onafhankelijk van de batch-levenscyclus.
+
+### Story 2.1: Salarisstructuur, categorieën en de geordende regelketen
+
+Als salarisadministrateur,
+wil ik de maandelijkse salarisstructuur, de categorieën, de geordende salarisregel-opzet en het brutoloon,
+zodat een loonstrook het brutoloon in de juiste evaluatievolgorde berekent en latere wettelijke regels een fundament hebben om op voort te bouwen.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** seed-data, **dan** bestaan het maandelijkse structuurtype (`CWMONTHLY`) en de standaard-staf-structuur (`CWSTAFF`) met de categorieën `BASIC`, `ALW`, `DED` en `ER`. (AR003, AR015)
+- **Gegeven** de regelketen, **dan** evalueren regels in strikt oplopende Sequence (10–150), zijn hulpregels verborgen op de loonstrook (`appears_on_payslip = False`), en leest een regel alleen eerdere resultaten (`rules.CODE.amount`, `categories.X`). (FR002, AR004)
+- **Gegeven** de brutoloonregel, **dan** is `TOTAL_LOON` (Seq 10) = maandelijks contractloon + loon in natura (natura-loon), positief geboekt op `BASIC`. (FR003, AR002)
+- **Gegeven** het loon-/looncomponentmodel, **dan** bestaan de uitsluitingsvlaggen `is_bijzondere_beloning` en `is_lei_di_bion_exempt` op looncomponenten, standaard `False`, zodat latere basisregels ze kunnen respecteren. (FR010, FR011b)
+- **Gegeven** de tekenconventie, **dan** zijn basis- en werkgeversbedragen positief en inhoudingen negatief. (AR002)
+
+### Story 2.2: Vier overwerksoorten als benoemde toeslagregels
+
+Als salarisadministrateur,
+wil ik de vier overwerksoorten berekend als aparte benoemde loonstrookregels,
+zodat overwerk op doordeweekse dagen, zaterdag, zondag en feestdagen wordt gespecificeerd en meegenomen in het loon.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** ingevoerde uren en een tarief per medewerker, **dan** berekenen `OVT_WD` (Seq 11), `OVT_SAT` (Seq 12), `OVT_SUN` (Seq 13) en `OVT_PH` (Seq 14) elk een benoemde regel in `ALW`. (FR004, AR003)
+- **Gegeven** de overwerkstandaarden, **dan** passen deze de bevestigde standaardtarieven toe (150/150/200/200), in afwachting van definitieve bevestiging (OQ-03). (FR004, AR018)
+- **Gegeven** een overwerkcomponent, **dan** kan deze `is_bijzondere_beloning` (incidenteel) of `is_lei_di_bion_exempt` dragen, gekozen door de salarisadministratie-manager, zonder frequentiedrempel in de engine. (FR010, FR011b)
+
+### Story 2.3: BVZ-zorgpremie
+
+Als salarisadministrateur,
+wil ik de BVZ-zorgpremie berekend op de jaarlijks geplafonneerde premiegrondslag,
+zodat de werkgevers- en werknemersbijdragen BVZ overeenkomen met de officiële 2026 SVB-tabel.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de premiegrondslag, **dan** is `BVZ_PREM_INC` (Seq 20, nooit-gepoort) = `categories.BASIC + categories.ALW`, met uitsluiting van `is_lei_di_bion_exempt`-componenten en inclusief `is_bijzondere_beloning`. (FR005, AR005, AR007, AR017)
+- **Gegeven** het werkgeversdeel, **dan** is `BVZ_ER` (Seq 30, verborgen) = 9,3% van de BVZ-grondslag cumulatief geplafonneerd op XCG 150.000/jr, geboekt op `ER` (uitgesloten van NET). (FR005, AR005)
+- **Gegeven** het werknemersdeel, **dan** is `BVZ_EMP` (Seq 40) = 4,3% vlak op de geplafonneerde grondslag, negatief in `DED`. (FR005, AR002)
+- **Gegeven** het tarief en het plafond, **dan** worden deze gelezen uit het per-jaar `hr.svb.parameters`-record — geen literal in Python. (FR017, AR006)
+- **Gegeven** `enabled = False` op de BVZ-loonregel, **dan** retourneert `BVZ_EMP` 0,00 terwijl `BVZ_PREM_INC` blijft draaien. (FR014, AR007)
+
+### Story 2.4: AOV/AWW-premie met toeslag boven het plafond
+
+Als salarisadministrateur,
+wil ik de AOV/AWW-premie cumulatief berekend tot het jaarplafond plus de 1%-toeslag daarboven,
+zodat een eenmalige jaarlijkse uitkering alleen over de resterende ruimte wordt belast en hoge verdieners de toeslag betalen.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de grondslag, **dan** is `AOV_PREM_INC` (Seq 50, nooit-gepoort) = `categories.BASIC + categories.ALW` (dezelfde uitsluitingen als BVZ). (FR006, AR007, AR017)
+- **Gegeven** de werknemerspremie, **dan** is `AOV_AWW_EMP` (Seq 60) = 6,5% cumulatief berekend op het YTD-premieloon geplafonneerd op XCG 100.000/jr minus reeds ingehouden premie, negatief in `DED`. (FR006, AR005)
+- **Gegeven** de werkgeverspremie, **dan** is `AOV_AWW_ER` (Seq 61, verborgen) = 9,5% op dezelfde geplafonneerde grondslag, in `ER`. (FR006)
+- **Gegeven** YTD-inkomen boven het plafond, **dan** past `AOV_AWW_1PCT` (Seq 62) een 1%-werknemerstoeslag toe op het meerdere en is 0,00 voor medewerkers onder het plafond. (FR006)
+- **Gegeven** de tarieven, het plafond en de toeslag, **dan** worden deze alle gelezen uit `hr.svb.parameters`. (FR017, AR006)
+
+### Story 2.5: AVBZ-premie voor langdurige zorg
+
+Als salarisadministrateur,
+wil ik de AVBZ-premie berekend op de AOV-grondslag geplafonneerd op het AVBZ-plafond,
+zodat de bijdragen voor langdurige zorg overeenkomen met de 2026 SVB-tabel.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de werknemerspremie, **dan** is `AVBZ_EMP` (Seq 70) = 1,5% vlak op `AOV_PREM_INC` cumulatief geplafonneerd op XCG 606.247,08/jr, negatief in `DED`. (FR007, AR005)
+- **Gegeven** de werkgeverspremie, **dan** is `AVBZ_ER` (Seq 71, verborgen) = 0,5% op dezelfde geplafonneerde grondslag, in `ER`. (FR007)
+- **Gegeven** de tarieven en het plafond, **dan** worden deze gelezen uit `hr.svb.parameters`. (FR017, AR006)
+- **Gegeven** `enabled = False`, **dan** retourneert `AVBZ_EMP` 0,00 zonder de keten te breken. (FR014, AR007)
+
+### Story 2.6: Fiscale loongrondslag en ruwe loonbelasting-lookup
+
+Als salarisadministrateur,
+wil ik de belastbare loongrondslag en de ruwe loonbelasting opgezocht uit de officiële loonbelastingtabel,
+zodat de loonbelasting aansluit op de 2026 Belastingdienst-maandtabel, inclusief lonen boven het plafond.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de grondslag, **dan** is `TAX_INC` (Seq 80, nooit-gepoort) = bruto − verwervingskosten (41,67/mnd forfait) − de aftrekbare AOV-werknemerspremie − de werknemerspensioenpremie (`inputs.PENSION_EMP`), en sluit `is_bijzondere_beloning` en `is_lei_di_bion_exempt`-componenten uit. (FR008, AR013)
+- **Gegeven** een werknemerspensioenpremie, **dan** is dit een periode-invoer op de loonstrook (`PENSION_EMP`), ingevoerd door de payroll-gebruiker, **uitsluitend** afgetrokken van `TAX_INC` als loonbelasting-aftrekpost en **niet** van de SVB-premiegrondslagen — de BVZ/AOV-premiegrondslag is de *zuivere opbrengst van arbeid* vóór persoonlijke aftrekposten (Landsverordening BVZ → LvIB 1943 Art. 3(4)). (FR008)
+- **Gegeven** de ruwe belasting, **dan** is `LOONBEL_RAW` (Seq 90, nooit-gepoort) = `lookup_loonbelasting(TAX_INC, 'maand', payslip.date_to)` met sleutel `floor(TAX_INC / 5) × 5`. (FR008, AR024, AR020)
+- **Gegeven** `TAX_INC` boven het tabelplafond (XCG 16.670/mnd voor 2026), **dan** is `LOONBEL_RAW = ceiling_tax + 46,5% × meerdere`; bijv. loon 20.000 → 4.862,91 + 46,5% × 3.330 = XCG 6.411,36. (FR008, AR024)
+- **Gegeven** een ontbrekende tabel voor de effectieve datum, **dan** wordt een `UserError` opgeworpen (fail-loud), nooit een stille 0. (AR021)
+
+### Story 2.7: Loonbelasting met heffingskortingen
+
+Als salarisadministrateur,
+wil ik de heffingskortingen toegepast op de ruwe loonbelasting,
+zodat elke medewerker de basiskorting plus eventuele persoonlijke kortingen krijgt, met een ondergrens van nul.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de standaardkorting, **dan** trekt `LOONBEL` (Seq 100) de basiskorting (2.915/jr = 242,92/mnd) af van `LOONBEL_RAW` als een geldelijke aftrek van de belasting (niet van het inkomen), voor elke medewerker. (FR009, AR013)
+- **Gegeven** medewerkerspecifieke kortingen, **dan** worden de alleenverdieners-, kinder- en ouderentoeslag afgetrokken van de belasting op basis van velden op de medewerker. (FR009)
+- **Gegeven** dat de maandtabel exclusief basiskorting is gepubliceerd, **dan** wordt de basiskorting hier afgetrokken en niet verondersteld al in de tabel te zitten. (FR008)
+- **Gegeven** een uitgewerkt voorbeeld `TAX_INC` = 3.245/mnd, **dan** is `LOONBEL` = −(316,39 − 242,92) = −XCG 73,47, negatief in `DED` en met ondergrens 0. (FR008)
+
+### Story 2.8: Extra belasting op bijzondere beloningen
+
+Als salarisadministrateur,
+wil ik bijzondere beloningen belast via de tabel met marginale tarieven voor bijzondere beloningen,
+zodat vakantiegeld, bonussen en incidentele overuren eenmalig via hun eigen tabel worden belast.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een `is_bijzondere_beloning`-component, **dan** blijft deze in NET en in de SVB-premiegrondslag maar is uitgesloten van `TAX_INC`, en is `EXTRA_TAX` (Seq 110) = `lookup_marginal_rate(jaarloon)` × het bijzondere-beloningsbedrag, negatief in `DED`. (FR010, AR012)
+- **Gegeven** het tarief, **dan** wordt het eenmaal per belastingjaar vastgezet op basis van het vorige-jaars jaarloon (geannualiseerd indien gedeeltelijk; verwacht jaarloon voor nieuwe medewerkers), met een override door de salarisadministratie-manager, opgeslagen per (medewerker, jaar), en wordt het toegepaste tarief vastgelegd op de loonstrookregel. (FR010)
+- **Gegeven** een jaarloon, **dan** retourneert `lookup_marginal_rate` het enkele bandtarief (zonder accumulatie) uit de 6-bands 2026-tabel. (FR010, AR006)
+
+### Story 2.9: Lei di Bion-vrijgestelde overuren
+
+Als salarisadministrateur,
+wil ik goedgekeurde Lei di Bion-overuren vrij van belasting en premies uitbetaald,
+zodat tot 10 vrijgestelde uren/week onder een goedgekeurde beschikking volledig netto worden uitbetaald.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een `is_lei_di_bion_exempt`-component onder een goedgekeurde beschikking, **dan** is deze uitgesloten van zowel `TAX_INC` als de premiegrondslagen (0% / 0%) maar wordt toch in NET uitbetaald. (FR011b)
+- **Gegeven** dat de beschikking is verstrekt en goedgekeurd door de Payroll-manager (`group_l10n_cw_payroll_manager`), **dan** geldt de vrijstelling; zonder goedkeuring, of boven 10 uur/week, valt het overwerk terug op een belaste route (regulier → maandtabel of incidenteel → bijzondere). (FR011b)
+- **Gegeven** 10 vrijgestelde overuren = XCG 302,90 bruto, **dan** is netto = 302,90; niet vrijgesteld (bijzondere 9,75%) → netto = 273,37. (FR011b)
+
+### Story 2.10: ZV- en OV-werkgeverspremies
+
+Als salarisadministrateur,
+wil ik de ZV- en OV-werkgeverspremies berekend op het maandelijkse loonplafond,
+zodat de ziekte- en ongevallenbijdragen overeenkomen met de maandelijks geplafonneerde SVB-grondslag.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de ZV-premie, **dan** is `ZV_ER` (Seq 120, verborgen) = 1,9% op de gedeelde ZV/OV-grondslag geplafonneerd op XCG 7.146,10/maand, direct toegepast (niet geannualiseerd), in `ER`. (FR011, AR005)
+- **Gegeven** de OV-premie, **dan** is `OV_ER` (Seq 121, verborgen) = het contract-OV% (gevarenklasse) op dezelfde maandelijks geplafonneerde grondslag, in `ER`. (FR011, FR019)
+- **Gegeven** de tarieven en het plafond, **dan** komen het ZV-tarief en het gedeelde plafond uit `hr.svb.parameters` en het OV% uit het contract. (FR017, AR006)
+- **Gegeven** `enabled = False`, **dan** retourneert de premie 0,00 zonder de keten te breken. (FR014, AR007)
+
+### Story 2.11: Nettoloon, onbelaste vergoedingen en werkgeverskosten
+
+Als salarisadministrateur,
+wil ik het nettoloon, de onbelaste vergoedingen en de informatieve werkgeverskosten,
+zodat de loonstrook toont wat de medewerker ontvangt en wat de werkgever draagt.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de nettoregel, **dan** is `NET` (Seq 130, nooit-gepoort) = `categories.BASIC + categories.ALW + categories.DED` (inhoudingen negatief); `ER`-bedragen zijn uitgesloten. (FR012, AR003, AR007)
+- **Gegeven** onbelaste vergoedingen, **dan** is `NONTAXED` (Seq 140) een aparte regel na netto; uitbetaald bedrag = netto + onbelast. (FR012, AR003)
+- **Gegeven** het werkgeverstotaal, **dan** telt `TOTAL_ER_COST` (Seq 150, nooit-gepoort) de werkgeverskosten informatief op, uitgesloten van NET. (FR013, AR007)
+
+### Story 2.12: Aan/uit-poort en nooit-gepoorte set
+
+Als salarisadministrateur,
+wil ik individuele premies en belastingen per medewerker aan of uit kunnen zetten,
+zodat een uitgeschakeld component 0,00 retourneert zonder de berekening te breken, terwijl gedeelde grondslagen altijd draaien.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** de aan/uit-poort, **dan** controleert elke premie-/belastingregel zijn `hr.employee.wage.line.enabled`; bij `False` zet deze `result = 0.00` en slaat de logica over, en leest downstream 0,00 (nooit een fout of verouderde waarde). (FR014, AR007)
+- **Gegeven** de nooit-gepoorte set, **dan** draaien `BVZ_PREM_INC`, `AOV_PREM_INC`, `TAX_INC`, `LOONBEL_RAW`, `NET` en `TOTAL_ER_COST` altijd, ongeacht de vlaggen. (FR014, AR007)
+- **Gegeven** een audit-vrijstelling, **dan** blijft een regel met `active = True, enabled = False` zichtbaar maar retourneert 0,00. (AR008)
+
+### Story 2.13: Wettelijke aansluiting voor representatieve medewerkers
+
+Als salarisadministrateur,
+wil ik dat één loonstrook aansluit op de officiële 2026-publicaties voor representatieve medewerkers,
+zodat de engine correct is bewezen voordat de run-levenscyclus wordt gebouwd.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** één loonstrook, **dan** berekent deze onafhankelijk van de batch-levenscyclus. (FR001)
+- **Gegeven** een standaardmedewerker, **wanneer** de loonstrook berekent, **dan** komen loonbelasting en alle SVB-premies overeen met de 2026 Belastingdienst/SVB-publicaties binnen XCG 0,02. (NFR001)
+- **Gegeven** een BVZ-vrijgestelde medewerker (`enabled = False` op BVZ), **dan** is BVZ 0,00 en blijft NET ongewijzigd. (NFR001, FR014)
+- **Gegeven** een medewerker boven het plafond (loon 20.000/mnd), **dan** is loonbelasting = XCG 6.411,36 en passen AOV/AVBZ hun cumulatieve plafonds en de 1%-toeslag toe. (NFR001, FR008)
+- **Gegeven** een medewerker met bijzondere beloningen, **dan** wordt het bijzondere bedrag alleen door `EXTRA_TAX` belast en blijft het in de premiegrondslag. (NFR001, FR010)
+
+## Epic 3: Run-levenscyclus, Boekhouding & Distributie
+
+Een salarisadministratie-manager draait de volledige maandcyclus: genereer de batch (waarbij medewerkers zonder gewerkte uren of met een geëindigd contract automatisch worden weggelaten), herbereken indien nodig, sluit dan eenmalig af om de jaar-tot-datum-totalen vast te leggen en een sluitende journaalpost te plaatsen, en distribueer ten slotte de loonstroken. Afsluiten is het enige commit-punt; heropenen draait de journaalpost terug en opnieuw afsluiten blijft correct.
+
+### Story 3.1: Run- en loonstrooklevenscyclus met herberekening
+
+Als salarisadministratie-manager,
+wil ik een run en zijn loonstroken door hun fasen sturen en herberekenen vóór afsluiten,
+zodat ik een batch kan controleren en corrigeren voordat ik deze vastleg.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een payroll-run, **dan** doorloopt deze Concept → Te controleren → Afgesloten (CONCEPT → TE CONTROLEREN → AFGESLOTEN). (FR020)
+- **Gegeven** het genereren van de batch, **dan** wordt in één actie een loonstrook aangemaakt voor elke medewerker in dienst, elk doorlopend Concept → Te controleren → Bevestigd (CONCEPT → TE CONTROLEREN → BEVESTIGD), met annuleren. (FR020, FR001)
+- **Gegeven** een run vóór afsluiten, **wanneer** ik herbereken (herberekening), **dan** worden de loonstrookbedragen herberekend; herberekenen mag alleen vóór afsluiten. (FR020)
+
+### Story 3.2: Automatische run-deelname en contractperiode-uitsluiting
+
+Als salarisadministratie-manager,
+wil ik dat medewerkers zonder gewerkte uren of met een geëindigd contract automatisch worden weggelaten,
+zodat de run alleen degenen betaalt die in de periode in dienst zijn, zonder handmatige stap.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een medewerker zonder gewerkte uren in de periode, **dan** wordt deze automatisch weggelaten — geen loonstrook, en afwezig uit de runtotalen en de journaalpost. (FR028)
+- **Gegeven** een medewerker wiens contract op of vóór de periode is geëindigd, **dan** wordt deze uitgesloten op basis van de contractstart-/einddatums. (FR028, FR029)
+- **Gegeven** een vast contract zonder einddatum, **dan** wordt de medewerker meegenomen zolang in dienst. (FR029)
+- **Gegeven** uitsluiting, **dan** is dit nooit een handmatige actie. (FR028)
+
+### Story 3.3: Afsluiten legt eenmalig vast — lock, YTD, journaal, rapporten
+
+Als salarisadministratie-manager,
+wil ik dat het afsluiten van de run het enige punt is dat resultaten vastlegt,
+zodat bevestigen, YTD, het journaal en rapporten precies eenmaal, samen, gebeuren.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** `action_close()`, **dan** bevestigt en vergrendelt deze de loonstroken, upsert `hr.wage.component.ytd` (verhoging per regel), plaatst de `account.move` (concept → geboekt) en stelt de runrapporten beschikbaar — het enige commit-punt. (FR021, FR018, AR010)
+- **Gegeven** de jaar-tot-datum-totalen, **dan** worden deze herberekend (niet blindelings opgeteld), gesleuteld per medewerker/component/jaar en behouden over jaren heen. (FR018, AR010)
+- **Gegeven** afsluiten, **dan** worden de jaar-tot-datum-totalen en het journaal nergens anders gewijzigd. (AR010)
+
+### Story 3.4: Sluitende journaalpost door constructie
+
+Als accountant,
+wil ik dat elke afsluiting een journaalpost plaatst die door constructie sluit,
+zodat de payroll-boekhouding altijd correct is zonder handmatige afstemming.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** afsluiten, **dan** heeft de `account.move` totale debet == totale credit door constructie (elke werkgeverskosten-debet heeft een bijpassende crediteuren-credit; totaal loon = netto + alle werknemersinhoudingen). (FR022, AR011, NFR005)
+- **Gegeven** de grootboek-mapping, **dan** is deze per company configureerbaar (rekeningnummers zijn indicatieve plaatshouders) en gebruikt de werkelijke 2-decimalen bedragen. (FR022, AR011)
+
+### Story 3.5: Gecontroleerd heropenen en idempotent opnieuw afsluiten
+
+Als salarisadministratie-manager,
+wil ik een afgesloten run veilig kunnen heropenen en opnieuw afsluiten,
+zodat correcties nooit de jaar-tot-datum-totalen dubbel tellen of dubbele of niet-sluitende journaalposten plaatsen.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een afgesloten run, **wanneer** ik deze heropen (het enige in-app heropenen), **dan** wordt de `account.move` teruggedraaid. (AR010)
+- **Gegeven** opnieuw afsluiten na een correctie, **dan** worden de jaar-tot-datum-totalen herberekend zodat ze niet dubbel worden geteld en geen dubbele of niet-sluitende journaalpost wordt geplaatst. (NFR008, AR010)
+- **Gegeven** disaster recovery, **dan** valt een volledige database-restore buiten de modulescope (een handmatige Odoo.sh-back-up vóór afsluiten is de operationele veiligheidsstap). (AR010)
+
+### Story 3.6: Senior-only loonstrookdistributie na afsluiten
+
+Als salarisadministratie-manager,
+wil ik dat het distribueren van loonstroken een aparte senior-only actie is na afsluiten,
+zodat medewerkers loonstroken alleen ontvangen wanneer deze expliciet worden vrijgegeven.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** distributie, **dan** is dit een aparte expliciete actie beperkt tot `group_l10n_cw_payroll_manager` (geen nieuwe groep toegevoegd). (FR030, AR019)
+- **Gegeven** de poort, **dan** is deze alleen toegestaan na afsluiten van de run plus een expliciete "geen restore nodig"-bevestiging; het afsluiten van een run distribueert niet. (FR030, AR019)
+- **Gegeven** het verzendkanaal (e-mail / Medewerkersportaal / app), **dan** is dit uitgesteld (OQ-01). (FR030, AR018)
+
+## Epic 4: Wettelijke Rapporten
+
+Elke afgesloten run produceert de officiële Curaçaose documenten en aangiften. Rapporten zijn read-only (Reports-laag): ze lezen vastgelegde bedragen en herberekenen geen enkele wettelijke waarde.
+
+### Story 4.1: Loonstrook-PDF (A-01)
+
+Als medewerker,
+wil ik een loonstrook-PDF in Curaçaose lay-out,
+zodat ik een officieel bewijs heb van mijn loon en inhoudingen.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een berekende loonstrook, **dan** rendert rapport A-01 een QWeb-PDF in Curaçaose lay-out met de loonstrookregels. (FR023)
+- **Gegeven** de Reports-laag, **dan** leest het rapport alleen vastgelegde bedragen en herberekent geen enkele wettelijke waarde. (FR023)
+
+### Story 4.2: Maandelijkse loonbelastingaangifte (B-01)
+
+Als salarisadministratie-manager,
+wil ik de maandelijkse loonbelastingaangifte per run,
+zodat ik de loonbelasting bij de Belastingdienst kan indienen.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een afgesloten run, **dan** toont rapport B-01 de maandelijkse loonbelastingtotalen in hele XCG (decimalen weggelaten / afgekapt, niet afgerond). (FR024)
+- **Gegeven** de Reports-laag, **dan** leest B-01 vastgelegde bedragen en berekent niets. (FR024)
+
+### Story 4.3: SVB-premieaangifte (B-02)
+
+Als salarisadministratie-manager,
+wil ik de maandelijkse SVB-premieaangifte per run,
+zodat ik de premies bij de SVB kan indienen.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een afgesloten run, **dan** toont rapport B-02 de SVB-premietotalen (BVZ, AOV/AWW, AVBZ, ZV, OV) in hele XCG (decimalen weggelaten / afgekapt). (FR024)
+- **Gegeven** de Reports-laag, **dan** leest B-02 vastgelegde bedragen en berekent niets. (FR024)
+
+### Story 4.4: Sluitend journaalpost-overzicht (B-05)
+
+Als accountant,
+wil ik het payroll-journaalpost-overzicht per run,
+zodat ik kan verifiëren dat de geplaatste post sluit.
+
+**Acceptatiecriteria:**
+
+- **Gegeven** een afgesloten run, **dan** vat rapport B-05 de sluitende journaalpost (`account.move`) samen met totale debet == totale credit. (FR025, NFR005)
+- **Gegeven** de Reports-laag, **dan** leest B-05 de geboekte post en berekent niets. (FR025)
 
 ## Epic 5: Wettelijke Vakantieopbouw & Saldo (v1.1R)
 
