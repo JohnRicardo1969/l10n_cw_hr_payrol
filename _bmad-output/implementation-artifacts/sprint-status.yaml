@@ -1,0 +1,113 @@
+# generated: 2026-07-07
+# last_updated: 2026-07-07
+# project: l10n_cw_hr_payrol
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; sprint-status surfaces open ones
+#
+# SCOPE NOTE (l10n_cw_hr_payroll):
+# ===============
+# - v1.0R = Epics 1-4 (monthly payroll). Recommended build order: Epic 1 -> 2 -> 3 -> 4.
+# - Epic 5 (Statutory Vacation Accrual) is v1.1R / deferred - kept in backlog; do NOT
+#   pull it into the v1.0R sprint before Epics 1-4 are done.
+
+generated: 2026-07-07
+last_updated: 2026-07-07
+project: l10n_cw_hr_payrol
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # ----- Epic 1: Module Foundation, Configuration & Security (v1.0R) -----
+  epic-1: in-progress
+  1-1-greenfield-module-skeleton-and-manifest: review
+  1-2-scoped-theme-and-dutch-i18n-scaffolding: backlog
+  1-3-security-roles-and-own-payslip-record-rule: backlog
+  1-4-dated-statutory-data-models-and-lookup-methods: backlog
+  1-5-seed-2026-statutory-data: backlog
+  1-6-loonbelasting-table-csv-import-and-versioning: backlog
+  1-7-three-tier-wage-component-model: backlog
+  1-8-apply-wizard-for-wage-component-sets: backlog
+  1-9-employee-and-contract-statutory-fields: backlog
+  1-10-year-to-date-totals-model: backlog
+  epic-1-retrospective: optional
+
+  # ----- Epic 2: Statutory Payroll Calculation Engine (v1.0R) -----
+  epic-2: backlog
+  2-1-salary-structure-categories-and-the-ordered-rule-chain: backlog
+  2-2-four-overtime-types-as-named-allowance-lines: backlog
+  2-3-bvz-health-premium: backlog
+  2-4-aov-aww-premium-with-above-ceiling-surcharge: backlog
+  2-5-avbz-long-term-care-premium: backlog
+  2-6-fiscal-wage-base-and-raw-loonbelasting-lookup: backlog
+  2-7-loonbelasting-with-tax-credits: backlog
+  2-8-bijzondere-beloningen-extra-tax: backlog
+  2-9-lei-di-bion-exempt-overtime: backlog
+  2-10-zv-and-ov-employer-premiums: backlog
+  2-11-net-pay-untaxed-reimbursements-and-employer-cost: backlog
+  2-12-enable-disable-gate-and-never-gate-set: backlog
+  2-13-statutory-reconciliation-for-representative-employees: backlog
+  epic-2-retrospective: optional
+
+  # ----- Epic 3: Run Lifecycle, Accounting & Distribution (v1.0R) -----
+  epic-3: backlog
+  3-1-run-and-payslip-lifecycle-with-herberekening: backlog
+  3-2-automatic-run-membership-and-contract-period-exclusion: backlog
+  3-3-close-commits-once-lock-ytd-journal-reports: backlog
+  3-4-balanced-journal-entry-by-construction: backlog
+  3-5-controlled-reopen-and-idempotent-re-close: backlog
+  3-6-senior-only-payslip-distribution-after-close: backlog
+  epic-3-retrospective: optional
+
+  # ----- Epic 4: Statutory Reports (v1.0R) -----
+  epic-4: backlog
+  4-1-payslip-pdf-a-01: backlog
+  4-2-monthly-wage-tax-return-b-01: backlog
+  4-3-svb-premium-return-b-02: backlog
+  4-4-balanced-journal-entry-summary-b-05: backlog
+  epic-4-retrospective: optional
+
+  # ----- Epic 5: Statutory Vacation Accrual & Balance (v1.1R - DEFERRED) -----
+  epic-5: backlog
+  5-1-seed-cw-vacation-leave-type-and-public-holidays: backlog
+  5-2-compute-yearly-entitlement-from-working-schedule: backlog
+  5-3-grant-yearly-allocation-and-prorate-mid-year-starts: backlog
+  5-4-carryover-cap-and-lapse-on-long-absence: backlog
+  5-5-payout-unused-vacation-days-on-termination: backlog
+  epic-5-retrospective: optional
