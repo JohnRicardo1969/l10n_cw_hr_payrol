@@ -544,7 +544,7 @@ Monthly hours are normalized as `(8h × 5d × 52wk) / 12 = 173.33 hrs/month`, us
 
 ## Module Manifest
 
-The module is published as version `19.0.0.1.0`, category `Accounting/Localizations/Payroll`, license `OPL-1`, country `cw`, `installable` and not auto-installed.
+The module is published as version `19.0.0.1.0`, category `Human Resources/Payroll` (the category used by every shipped `l10n_*_hr_payroll` module; chosen to keep a future official Odoo payroll-localization track open — decided 2026-07-07, superseding the v3.0D `Accounting/Localizations/Payroll`), license `OPL-1`, country `cw`, `installable` and not auto-installed.
 
 # Open Questions and Assumptions
 

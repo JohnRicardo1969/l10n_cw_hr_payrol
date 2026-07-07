@@ -46,7 +46,7 @@ No blocking questions remain for v1.0R. The other open questions (OQ-01..OQ-10) 
 
 ## Conventions when code is added
 
-- Manifest: version `19.0.0.1.0`, category `Accounting/Localizations/Payroll`, license `OPL-1`, country `cw`, installable, not auto-installed. Direct depends: `hr`, `hr_contract`, `hr_holidays`, `hr_payroll`, `hr_payroll_account`, `hr_attendance`.
+- Manifest: version `19.0.0.1.0`, category `Human Resources/Payroll` (matches all shipped `l10n_*_hr_payroll` modules — keeps the future official-localization track open; supersedes the v3.0D `Accounting/Localizations/Payroll`, decided 2026-07-07), license `OPL-1`, country `cw`, installable, not auto-installed. Direct depends: `hr`, `hr_contract`, `hr_holidays`, `hr_payroll`, `hr_payroll_account`, `hr_attendance`.
 - Salary-rule `amount_python_compute` context: `employee`, `contract`, `payslip`, `worked_days`, `inputs`, `categories`, `rules`, `env` — must assign `result`. Hidden intermediates carry `appears_on_payslip = False`.
 - UI strings and model menus are Dutch (e.g. Salarisadministratie → Configuratie → Tarieven); keep statutory terms in their official form (`basiskorting`, not `basisaftrek`).
 - Working-hours divisor is the fixed constant **173.33 hrs/month** (8h × 5d × 52wk ÷ 12).
