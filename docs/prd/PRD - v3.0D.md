@@ -230,7 +230,7 @@ This section describes the intended computation of each step. Annualisation is u
 
 ### Step 2 — BVZ Premium Income Base (Seq 20)
 
-The BVZ base is total loon less the verwervingskosten forfeit (XCG 41.67/month) and the employee pension contribution. The base is then annualised and capped at the BVZ ceiling of XCG 150,000/year before being returned to periodic form. This rule is a shared intermediate and always executes.
+The BVZ base derives from `categories.BASIC + categories.ALW` (overtime included) per **AD-14** — the verwervingskosten forfeit is **not** deducted here (AD-14 moves it to `TAX_INC` only). The base is applied **cumulatively** against the annual BVZ ceiling of XCG 150,000/year per **AD-24** (year-to-date premie-loon capped at the ceiling, minus premium already withheld), not by ×12 annualisation. This rule is a shared intermediate and always executes. *(Resolved — F1: per the Landsverordening BVZ (P.B. 2013, no. 3) Art. 1.1(o) → Landsverordening inkomstenbelasting 1943 Art. 3(4), the BVZ premiegrondslag is the* zuivere opbrengst van arbeid *before persoonlijke aftrekposten, so the employee pension premium is **not** deducted here — confirming the AD-14 base. See `implementation-readiness-report-2026-07-04.md` F1.)*
 
 ### Steps 3–4 — BVZ Employer and Employee (Seq 30, 40)
 
@@ -238,7 +238,7 @@ The employer pays a flat 9.3% and the employee a flat 4.3% of the BVZ base, capp
 
 ### Step 5 — AOV/AWW/AVBZ Premium Income Base (Seq 50)
 
-The AOV base is total loon less the verwervingskosten forfeit, the employee pension contribution, and the beschikking (tax ruling deduction). It is the shared base for AOV/AWW, the above-ceiling surcharge, and AVBZ, and always executes. The deduction is the employee pension part (werknemersdeel), correcting an error in the original pseudocode that referenced the employer part.
+The AOV base derives from `categories.BASIC + categories.ALW` (overtime included) per **AD-14** — the shared base for AOV/AWW, the above-ceiling surcharge, and AVBZ — and always executes, applied **cumulatively** against each premium's annual ceiling per **AD-24**. Under AD-14 the verwervingskosten forfeit is not deducted here (it touches `TAX_INC` only), and the beschikking no longer reduces the premium base (it survives as an employee field for Lei di Bion approval, AD-23). *(Resolved — F1: by the same reasoning as BVZ (premiegrondslag =* zuivere opbrengst van arbeid *before persoonlijke aftrekposten), the employee pension premium (werknemersdeel) is **not** deducted from the AOV/AWW base either — to be confirmed under the Landsverordening AOV/AWW; the AD-14 base already excludes it. See `implementation-readiness-report-2026-07-04.md` F1.)*
 
 ### Step 6 — AOV/AWW (Seq 60, 61, 62)
 
@@ -250,7 +250,7 @@ AVBZ uses the AOV base capped at the AVBZ ceiling of XCG 606,247.08/year. Per th
 
 ### Steps 8–10 — Loonbelasting (Seq 80, 90, 100)
 
-`TAX_INC` is the fiscal wage: the AOV base less the absolute AOV/AWW employee premium. `LOONBEL_RAW` looks up the raw loonbelasting directly from the official Belastingdienst lb-maandtabel (`hr.loonbelasting.tabel`) for the `TAX_INC` value and the payslip period-end date — no annualisation (the table is already period-specific). For wages above the table ceiling (XCG 16,670/month) the above-ceiling extension applies: `ceiling_tax + (TAX_INC − ceiling) × 46.5%` (MR 144 § Algemeen). `LOONBEL` then applies the toeslagen as monetary deductions from the raw tax amount — not as reductions to taxable income — flooring the result at zero and returning it as a negative (deduction) value. Because the maandtabel is exclusief basiskorting, the basiskorting (XCG 3,247.35/year — official 2026; 2,915 was the prior-year value) is a required separate deduction applied here automatically to all employees; the remaining toeslagen are stored as annual amounts on employee fields and divided by 12.
+`TAX_INC` is the fiscal wage: gross less the verwervingskosten forfeit, the absolute AOV/AWW employee premium, and the employee pension premium (`inputs.PENSION_EMP`). The pension premium is a loonbelasting aftrekpost applied here **only** — not to the SVB premie-loon (F1, in scope for v1.0R, 2026-07-04). `LOONBEL_RAW` looks up the raw loonbelasting directly from the official Belastingdienst lb-maandtabel (`hr.loonbelasting.tabel`) for the `TAX_INC` value and the payslip period-end date — no annualisation (the table is already period-specific). For wages above the table ceiling (XCG 16,670/month) the above-ceiling extension applies: `ceiling_tax + (TAX_INC − ceiling) × 46.5%` (MR 144 § Algemeen). `LOONBEL` then applies the toeslagen as monetary deductions from the raw tax amount — not as reductions to taxable income — flooring the result at zero and returning it as a negative (deduction) value. Because the maandtabel is exclusief basiskorting, the basiskorting (XCG 2,915/year — the loonbelasting withholding basiskorting per AD-13 and the official 2026 *Loonbelastingverklaring*; the 3,247.35 figure is an inkomstenbelasting amount, not the loonbelasting basiskorting) is a required separate deduction applied here automatically to all employees; the remaining toeslagen are stored as annual amounts on employee fields and divided by 12.
 
 ### Step 11 — Extra Tax on Bijzondere Beloningen (Seq 110)
 
@@ -396,7 +396,7 @@ Applied as monetary deductions from the computed tax, not as income reductions. 
 
 | Toeslag | Annual Amount (XCG) | Source |
 |---|---|---|
-| Basiskorting | 3,247.35 | Automatic — all employees (official 2026; 2,915 was prior-year) |
+| Basiskorting | 2,915 | Automatic — all employees (loonbelasting basiskorting per AD-13; the 3,247.35 figure is an inkomstenbelasting amount, not this) |
 | Alleenverdienerstoeslag | 1,779 | `l10n_cw_only_earner_deduction` |
 | Kindertoeslag — 1st child | 948 | `l10n_cw_child_deduction` (cumulative) |
 | Kindertoeslag — 2nd child | 475 | Added to above |
