@@ -122,7 +122,7 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 
 **Manifest and seed data (Tech Design §13):**
 
-- AR014: **Manifest** — depends on (`hr, hr_contract, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance`) with no theme dependency added; version `19.0.0.1.0`; country `cw`; license `OPL-1`; not an app and not auto-installed (`application=False, auto_install=False`); plus an assets entry (`assets`) that loads the theme stylesheet (`static/src/scss/cw_theme_prl10n.scss`) into the backend bundle (`web.assets_backend`) — see UX-DR001.
+- AR014: **Manifest** — depends on (`hr, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance`; **no `hr_contract`** — removed in Odoo 19, contracts absorbed into core `hr` as `hr.version`, decided 2026-07-07) with no theme dependency added; version `19.0.0.1.0`; country `cw`; license `OPL-1`; not an app and not auto-installed (`application=False, auto_install=False`); plus an assets entry (`assets`) that loads the theme stylesheet (`static/src/scss/cw_theme_prl10n.scss`) into the backend bundle (`web.assets_backend`) — see UX-DR001.
 - AR015: **Seed data** — ship the monthly structure type (`CWMONTHLY`), the standard-staff structure (`CWSTAFF`), the salary-rule categories, all CW salary rules, the **2026 `hr.svb.parameters` record** (one per year: all SVB premium rates, the AOV surcharge, and the ceilings), the bijzondere beloningen rate records (6 correct bands per the authoritative 2026 PDF), the Belastingdienst scalars (basiskorting 2,915/yr, verwervingskosten 500/yr, toeslagen), and the 2026 lb-maandtabel entries (≈ 3,335 rows, `period_type = maand`, `valid_from = 2026-01-01`) via CSV seed files.
 - AR016: **Translations** — provide the Dutch interface translation file (`i18n/nl.po`).
 
@@ -219,7 +219,7 @@ So that the Curaçao payroll framework is available without errors.
 **Acceptance Criteria:**
 
 - **Given** a clean Odoo 19 Enterprise database with `hr_payroll` installed, **When** I install `l10n_cw_hr_payroll`, **Then** it installs without error and reports version `19.0.0.1.0`, country `cw`, license `OPL-1`, `application=False`, and `auto_install=False`. (AR014)
-- **Given** the manifest, **When** inspected, **Then** `depends` = `hr, hr_contract, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance` with no theme dependency added. (AR014)
+- **Given** the manifest, **When** inspected, **Then** `depends` = `hr, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance` (no `hr_contract` — removed in Odoo 19; contracts live in core `hr` as `hr.version`) with no theme dependency added. (AR014)
 - **Given** the package layout, **When** inspected, **Then** directories follow the three-layer boundaries (Localization ← Application ← Reports) per Tech Design §13. (AR001)
 - **Given** the freshly installed skeleton, **Then** no statutory rate, ceiling, or threshold is hard-coded in Python. (AR006)
 
@@ -326,8 +326,8 @@ So that per-employee statutory inputs and the contract period are captured.
 **Acceptance Criteria:**
 
 - **Given** `hr.employee`, **Then** the tax-credit fields (alleenverdieners-, kinder-, ouderentoeslag) and the beschikking input exist. (FR019)
-- **Given** `hr.contract`, **Then** an OV% (gevarenklasse) field exists as an interim Float. (FR019)
-- **Given** `hr.contract`, **Then** a required start date and an optional end date exist; permanent contracts with no end date are allowed. (FR029)
+- **Given** `hr.version` (the Odoo 19 successor of `hr.contract`), **Then** an OV% (gevarenklasse) field exists as an interim Float. (FR019)
+- **Given** `hr.version`, **Then** a required contract start date and an optional end date exist (`contract_date_start` / `contract_date_end`); permanent contracts with no end date are allowed. (FR029)
 - **Given** these are extended Odoo views, **Then** the `.cw_theme_prl10n` wrapper is NOT applied. (UX-DR002)
 
 ### Story 1.10: Year-to-date totals model
@@ -422,8 +422,9 @@ So that loonbelasting reconciles to the 2026 Belastingdienst maandtabel includin
 
 **Acceptance Criteria:**
 
-- **Given** the base, **Then** `TAX_INC` (Seq 80, never-gated) = gross − verwervingskosten (41.67/mo forfeit) − the deductible AOV employee premium − the employee pension premium (`inputs.PENSION_EMP`), and excludes `is_bijzondere_beloning` and `is_lei_di_bion_exempt` earnings. (FR008, AR013)
+- **Given** the base, **Then** `TAX_INC` (Seq 80, never-gated) = the AD-14 earnings base (`categories.BASIC + categories.ALW`, excluding `is_bijzondere_beloning` and `is_lei_di_bion_exempt` earnings) − verwervingskosten (41.67/mo forfeit) − the deductible AOV employee premium − the employee pension premium (`PENSION_EMP` input, when present). (FR008, AR013, AR017)
 - **Given** an employee pension premium, **Then** it is a per-period payslip input (`PENSION_EMP`), entered by the payroll user, deducted **only** from `TAX_INC` as a loonbelasting aftrekpost and **not** from the SVB premie-loon bases — the BVZ/AOV premiegrondslag is the *zuivere opbrengst van arbeid* before persoonlijke aftrekposten (Landsverordening BVZ → LvIB 1943 Art. 3(4)). (FR008)
+- **Given** the input mechanism, **Then** this story creates the `PENSION_EMP` payslip input type (`hr.payslip.input.type`), and rules read it guarded — Odoo 19 `inputs` is a plain dict, so `inputs['PENSION_EMP'].amount if 'PENSION_EMP' in inputs else 0.0`; an employee without a pension arrangement computes without error. (FR008)
 - **Given** the raw tax, **Then** `LOONBEL_RAW` (Seq 90, never-gated) = `lookup_loonbelasting(TAX_INC, 'maand', payslip.date_to)` using key `floor(TAX_INC / 5) × 5`. (FR008, AR024, AR020)
 - **Given** `TAX_INC` above the table ceiling (XCG 16,670/mo for 2026), **Then** `LOONBEL_RAW = ceiling_tax + 46.5% × excess`; e.g. wage 20,000 → 4,862.91 + 46.5% × 3,330 = XCG 6,411.36. (FR008, AR024)
 - **Given** a missing table for the effective date, **Then** a `UserError` is raised (fail-loud), never a silent 0. (AR021)

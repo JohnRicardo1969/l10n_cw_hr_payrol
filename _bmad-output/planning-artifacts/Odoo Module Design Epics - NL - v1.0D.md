@@ -126,7 +126,7 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 **Manifest en seed-data (Technisch Ontwerp §13):**
 
-- AR014: **Manifest** — afhankelijk van (`hr, hr_contract, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance`) zonder thema-afhankelijkheid; version `19.0.0.1.0`; country `cw`; license `OPL-1`; geen app en niet automatisch geïnstalleerd (`application=False, auto_install=False`); plus een assets-vermelding (`assets`) die het themastylesheet (`static/src/scss/cw_theme_prl10n.scss`) in de backend-bundel (`web.assets_backend`) laadt — zie UX-DR001.
+- AR014: **Manifest** — afhankelijk van (`hr, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance`; **geen `hr_contract`** — verwijderd in Odoo 19, contracten opgenomen in kern-`hr` als `hr.version`, besloten 2026-07-07) zonder thema-afhankelijkheid; version `19.0.0.1.0`; country `cw`; license `OPL-1`; geen app en niet automatisch geïnstalleerd (`application=False, auto_install=False`); plus een assets-vermelding (`assets`) die het themastylesheet (`static/src/scss/cw_theme_prl10n.scss`) in de backend-bundel (`web.assets_backend`) laadt — zie UX-DR001.
 - AR015: **Seed-data** — lever het maandstructuurtype (`CWMONTHLY`), de standaard-staf-structuur (`CWSTAFF`), de salarisregelcategorieën, alle CW-salarisregels, het **`hr.svb.parameters`-record van 2026** (één per jaar: alle SVB-premietarieven, de AOV-toeslag en de plafonds), de bijzondere-beloningstariefrecords (zes correcte schijven volgens de officiële PDF van 2026), de Belastingdienst-scalairen (basiskorting 2.915/jr, verwervingskosten 500/jr, toeslagen), plus de lb-maandtabelgegevens van 2026 (≈ 3.335 rijen, `period_type = maand`, `valid_from = 2026-01-01`, via `data/hr.loonbelasting.tabel.lijn.csv`).
 - AR016: **Vertalingen** — lever het Nederlandse interfacevertaalbestand (`i18n/nl.po`).
 
@@ -223,7 +223,7 @@ zodat het Curaçaose payroll-raamwerk zonder fouten beschikbaar is.
 **Acceptatiecriteria:**
 
 - **Gegeven** een schone Odoo 19 Enterprise-database met `hr_payroll` geïnstalleerd, **wanneer** ik `l10n_cw_hr_payroll` installeer, **dan** installeert deze zonder fout en meldt versie `19.0.0.1.0`, land `cw`, licentie `OPL-1`, `application=False` en `auto_install=False`. (AR014)
-- **Gegeven** het manifest, **wanneer** geïnspecteerd, **dan** is `depends` = `hr, hr_contract, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance` zonder toegevoegde thema-afhankelijkheid. (AR014)
+- **Gegeven** het manifest, **wanneer** geïnspecteerd, **dan** is `depends` = `hr, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance` (geen `hr_contract` — verwijderd in Odoo 19; contracten leven in kern-`hr` als `hr.version`) zonder toegevoegde thema-afhankelijkheid. (AR014)
 - **Gegeven** de package-indeling, **wanneer** geïnspecteerd, **dan** volgen de mappen de drie-lagen-grenzen (Localization ← Application ← Reports) volgens Tech Design §13. (AR001)
 - **Gegeven** het pas geïnstalleerde skelet, **dan** is geen enkel wettelijk tarief, plafond of drempel hard gecodeerd in Python. (AR006)
 
@@ -330,8 +330,8 @@ zodat per-medewerker wettelijke invoer en de contractperiode worden vastgelegd.
 **Acceptatiecriteria:**
 
 - **Gegeven** `hr.employee`, **dan** bestaan de heffingskortingsvelden (alleenverdieners-, kinder-, ouderentoeslag) en de beschikking-invoer. (FR019)
-- **Gegeven** `hr.contract`, **dan** bestaat een OV%-veld (gevarenklasse) als tijdelijke Float. (FR019)
-- **Gegeven** `hr.contract`, **dan** bestaan een verplichte startdatum en een optionele einddatum; vaste contracten zonder einddatum zijn toegestaan. (FR029)
+- **Gegeven** `hr.version` (de Odoo 19-opvolger van `hr.contract`), **dan** bestaat een OV%-veld (gevarenklasse) als tijdelijke Float. (FR019)
+- **Gegeven** `hr.version`, **dan** bestaan een verplichte contractstartdatum en een optionele einddatum (`contract_date_start` / `contract_date_end`); vaste contracten zonder einddatum zijn toegestaan. (FR029)
 - **Gegeven** dat dit uitgebreide Odoo-weergaven zijn, **dan** wordt de `.cw_theme_prl10n`-wrapper NIET toegepast. (UX-DR002)
 
 ### Story 1.10: Jaar-tot-datum-totalenmodel
@@ -426,8 +426,9 @@ zodat de loonbelasting aansluit op de 2026 Belastingdienst-maandtabel, inclusief
 
 **Acceptatiecriteria:**
 
-- **Gegeven** de grondslag, **dan** is `TAX_INC` (Seq 80, nooit-gepoort) = bruto − verwervingskosten (41,67/mnd forfait) − de aftrekbare AOV-werknemerspremie − de werknemerspensioenpremie (`inputs.PENSION_EMP`), en sluit `is_bijzondere_beloning` en `is_lei_di_bion_exempt`-componenten uit. (FR008, AR013)
+- **Gegeven** de grondslag, **dan** is `TAX_INC` (Seq 80, nooit-gepoort) = de AD-14-loongrondslag (`categories.BASIC + categories.ALW`, met uitsluiting van `is_bijzondere_beloning`- en `is_lei_di_bion_exempt`-componenten) − verwervingskosten (41,67/mnd forfait) − de aftrekbare AOV-werknemerspremie − de werknemerspensioenpremie (`PENSION_EMP`-invoer, indien aanwezig). (FR008, AR013, AR017)
 - **Gegeven** een werknemerspensioenpremie, **dan** is dit een periode-invoer op de loonstrook (`PENSION_EMP`), ingevoerd door de payroll-gebruiker, **uitsluitend** afgetrokken van `TAX_INC` als loonbelasting-aftrekpost en **niet** van de SVB-premiegrondslagen — de BVZ/AOV-premiegrondslag is de *zuivere opbrengst van arbeid* vóór persoonlijke aftrekposten (Landsverordening BVZ → LvIB 1943 Art. 3(4)). (FR008)
+- **Gegeven** het invoermechanisme, **dan** maakt deze story het `PENSION_EMP`-invoertype aan (`hr.payslip.input.type`), en lezen regels het beveiligd — Odoo 19 `inputs` is een gewone dict, dus `inputs['PENSION_EMP'].amount if 'PENSION_EMP' in inputs else 0.0`; een medewerker zonder pensioenregeling berekent zonder fout. (FR008)
 - **Gegeven** de ruwe belasting, **dan** is `LOONBEL_RAW` (Seq 90, nooit-gepoort) = `lookup_loonbelasting(TAX_INC, 'maand', payslip.date_to)` met sleutel `floor(TAX_INC / 5) × 5`. (FR008, AR024, AR020)
 - **Gegeven** `TAX_INC` boven het tabelplafond (XCG 16.670/mnd voor 2026), **dan** is `LOONBEL_RAW = ceiling_tax + 46,5% × meerdere`; bijv. loon 20.000 → 4.862,91 + 46,5% × 3.330 = XCG 6.411,36. (FR008, AR024)
 - **Gegeven** een ontbrekende tabel voor de effectieve datum, **dan** wordt een `UserError` opgeworpen (fail-loud), nooit een stille 0. (AR021)
