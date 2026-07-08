@@ -9,9 +9,10 @@
     'author': 'Caribware',
     'license': 'OPL-1',
     'countries': ['cw'],
+    # NOTE: no 'hr_contract' — removed in Odoo 19; contracts are absorbed into
+    # core 'hr' as the hr.version model (decided 2026-07-07, review D1).
     'depends': [
         'hr',
-        'hr_contract',
         'hr_holidays',
         'hr_payroll',
         'hr_payroll_account',
