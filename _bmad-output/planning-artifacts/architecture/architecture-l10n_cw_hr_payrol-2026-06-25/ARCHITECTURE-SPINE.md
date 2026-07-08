@@ -35,13 +35,13 @@ spine does not mirror it.
 **Odoo Enterprise localization module** following the official `l10n_*_hr_payroll` pattern (analogous to
 `l10n_be_hr_payroll`), layered on the native `hr_payroll` engine. The calculation core is a
 **sequential salary-rule pipeline**: each `hr.salary.rule` is a filter that reads a shared payslip
-context (`employee`, `contract`, `payslip`, `categories`, `rules`, `inputs`, `worked_days`, `env`) and
+context (`employee`, `version` — the `hr.version` record, Odoo 19's successor of the v3.0D `contract` —, `payslip`, `categories`, `rules`, `inputs`, `worked_days`, `env`) and
 assigns `result`, in strict ascending sequence. Statutory values are **data, not code** — held in dated
 records and read at runtime. Three layers map to directories:
 
 | Layer | Owns | Directories |
 | --- | --- | --- |
-| Localization | Statutory definitions + dated data | `models/hr_salary_rule.py`, `models/hr_tax_bracket.py`, `models/hr_loonbelasting_tabel.py`, `models/hr_svb_parameters.py`, `models/hr_contract.py`, `models/hr_employee.py`, `data/`, salary-rule Python |
+| Localization | Statutory definitions + dated data | `models/hr_salary_rule.py`, `models/hr_tax_bracket.py`, `models/hr_loonbelasting_tabel.py`, `models/hr_svb_parameters.py`, `models/hr_version.py` (Odoo 19: `hr.version` replaces `hr.contract` — decided 2026-07-07), `models/hr_employee.py`, `data/`, salary-rule Python |
 | Application | Config + workflow + UI + security | `models/hr_wage_component_set.py`, `models/hr_employee_wage_line.py`, `models/hr_wage_component_ytd.py`, `models/hr_employee_bijzonder_tarief.py`, `wizard/`, `views/`, `security/` |
 | Reports | Read-only rendering | `report/` |
 
@@ -269,7 +269,7 @@ flowchart TD
 
 - **Binds:** all module views/reports and the `cw_theme_prl10n` SCSS.
 - **Prevents:** the theme leaking onto Odoo's own/inherited pages — one developer scoping correctly
-  while another applies the wrapper to an inherited `hr.employee`/`hr.contract` view and restyles
+  while another applies the wrapper to an inherited `hr.employee`/`hr.version` view and restyles
   Odoo's native screens.
 - **Rule:** the module ships an in-module SCSS bundle `static/src/scss/cw_theme_prl10n.scss`, registered
   via the manifest `assets` key (`web.assets_backend`) — never the `data` list, and **no theme module
@@ -409,14 +409,14 @@ flowchart TD
     payroll manager **may override** to the **current-year jaarloon** when the prior year is
     unrepresentative (a non-recurring bonus/jubileum, unusual overtime, a salary jump) — the source
     recommends this to avoid an IB-naheffing. The **current-year jaarloon** (Case C *and* the override)
-    is the **projected** annual regular wage (`contract.wage × 12`), **not** the wage accumulated so far
+    is the **projected** annual regular wage (`version.wage × 12`; Odoo 19 `hr.version`), **not** the wage accumulated so far
     — so it does not drift with when in the year it is computed (keeping the override path
     order-independent too). *Jaarloon composition* (which components count) is seed/tech-design detail;
     the default is the annual regular taxable loon (prior-year total from YTD; Case C from the
     contract), excluding the bijzondere beloningen themselves.
   - **The annual rate is configuration, not a payslip selection — so it is order-independent.** The
     tarief for an (employee, tax year) is a function **only** of prior-year data and current-year
-    config: the prior-year jaarloon (A/B), `contract.wage × 12` (C), or the manager override — **never**
+    config: the prior-year jaarloon (A/B), `version.wage × 12` (C), or the manager override — **never**
     a current-year beloning payslip amount. Because no jaarloon basis reads a current beloning, the rate
     is identical regardless of which beloning is processed first or the order in which runs close: there
     is no "selection" left to be order-sensitive. It is **recomputed afresh next year** (the new prior
@@ -620,7 +620,7 @@ flowchart TD
 | --- | --- |
 | Naming | Custom fields on standard models prefixed `l10n_cw_`; new models `hr.<thing>` (e.g. `hr.tax.bracket`); rule codes UPPER_SNAKE (`AOV_AWW_EMP`); component-set technical codes UPPER_SNAKE and immutable (`STD_OFFICE`). |
 | Statutory data | SVB premium rates + ceilings as a per-year `hr.svb.parameters` record (AD-22); bijzondere beloningen rates and the Belastingdienst scalars (basiskorting, verwervingskosten, toeslagen) as dated `hr.tax.bracket` records (AD-5); loonbelasting as versioned `hr.loonbelasting.tabel` entries (AD-20). All three are selected by `valid_from desc, id desc` among active records valid on `payslip.date_to` — the latest effective version wins, corrections handled by upload order — and are append-only. **Authoritative source:** the official Belastingdienst (loonbelasting, incl. basiskorting) and SVB (premiums, ceilings) annual publications govern; any literal in the v3.0D tech design is indicative only and superseded by them. |
-| Money & rounding | XCG; round to 2 dp at rule output; deductions negative (AD-1); annualise to apply ceilings (AD-4). |
+| Money & rounding | XCG; round to 2 dp at rule output; deductions negative (AD-1); annual SVB ceilings applied cumulatively (AD-24 — AD-4's ×12 superseded); ZV/OV monthly cap direct (AD-22); lb-tabel period-specific (AD-20). |
 | State & mutation | Run/payslip state via Odoo states; YTD, the bijzondere-tarief record, and the journal are mutated only in `action_close()` (AD-9, AD-21); rules are pure functions of the payslip context and **never write** — EXTRA_TAX may *read* the per-(employee, year) tarief record and the manager's pre-close basis/override input, but no rule writes any record. |
 | Audit & access | All custom models inherit `mail.thread`; four security groups enforce least privilege (Employee, Payroll User, Payroll Manager, Accountant); the most senior — Payroll Manager — also gates distribution (AD-16) and approves the Lei di Bion beschikking (AD-23); employee record rule restricts payslips to `employee_id.user_id = user`. |
 | Disable semantics | `active` = visibility+calc; `enabled` = calc-only (AD-7); never gate the never-gate set (AD-6). |
@@ -638,7 +638,7 @@ Seed — verified current at authoring; the code owns this once it exists.
 | Module version | 19.0.0.1.0 |
 | License | OPL-1 |
 | Country | `cw` |
-| Direct depends | `hr`, `hr_contract`, `hr_holidays`, `hr_payroll`, `hr_payroll_account`, `hr_attendance` |
+| Direct depends | `hr`, `hr_holidays`, `hr_payroll`, `hr_payroll_account`, `hr_attendance` — no `hr_contract` (removed in Odoo 19; contracts absorbed into core `hr` as `hr.version`, decided 2026-07-07) |
 
 ## Structural Seed
 
