@@ -18,6 +18,17 @@ Read these before designing or implementing anything; they are authoritative and
 
 `_bmad/` and `.claude/` are gitignored BMad/tooling scaffolding, not project source.
 
+### Spec-sync discipline (MANDATORY)
+
+Any decision made while working on epics, stories, or implementation that changes a requirement, a statutory rule, a model, a dependency, or an architecture invariant MUST be applied to **all living spec documents in the same working session**, never deferred:
+
+- `docs/prd/PRD - v3.0D.md` — the PRD
+- `_bmad-output/planning-artifacts/architecture/.../ARCHITECTURE-SPINE.md` (+ its `.memlog.md`) — the architecture spine
+- `_bmad-output/planning-artifacts/Odoo Module Design Epics - EN - v1.0D.md` **and** `- NL -` — the epics/stories pair (bilingual lockstep)
+- This file (CLAUDE.md), where a stated convention changes
+
+Add a dated supersession note at each edit (e.g. "decided 2026-07-07, superseding …"). **Excluded** (point-in-time records — never retro-edit): `docs/tech_design_l10n_cw_hr_payroll_v3.0D.txt` and historical review artifacts; the spine rules their literals superseded. Precedents: the category decision, the F1–F3 readiness reconciliations, and the `hr_contract`→`hr.version` (D1) ripple were each applied across the full chain in one pass.
+
 ## What the module does
 
 Implements the complete Curaçao statutory payroll framework (loonbelasting + SVB premiums: AOV/AWW, AVBZ, BVZ, ZV, OV) entirely inside Odoo, with no external payroll service. The calculation is a fixed sequence of `hr.salary.rule` records (Seq 10–150) mirroring the official Curaçao payroll pseudocode, one rule per step. v1.0R is **monthly payroll only**; other pay periods and many features are deferred (see PRD roadmap). **Cessantia is permanently out of scope** — if ever reinstated, its rule, GL accounts, and the journal balance formula must change together.
@@ -29,7 +40,7 @@ These are binding. Most calculation bugs come from violating one of them; the `.
 - **Three layers, dependencies point inward toward Localization.** *Localization* (statutory definitions + data: `hr.salary.rule` extension, `CWMONTHLY`/`CWSTAFF` structures, the CW rules, `hr.tax.bracket`, employee toeslag fields, contract OV%) ← *Application* (config/workflow: `hr.wage.component.set`(+line), `hr.employee.wage.line`, `hr.wage.component.ytd`, apply wizard, views/menus/security) ← *Reports* (QWeb PDF + CSV; **read-only, compute nothing**). A report must never recompute a statutory amount.
 - **Strict sequence + reference discipline.** Rules evaluate in ascending sequence (10→150). A rule may reference only *prior* results (`rules.CODE.amount`, `categories.X`) — never a later rule.
 - **Sign convention.** Deduction/employee-premium rules return **negative** amounts; employer-cost and base rules positive. `NET` sums `BASIC + ALW + DED` directly relying on `DED` being negative. Employer contributions go to category `ER` and are **excluded** from NET. Overtime goes to `ALW`.
-- **Annualisation.** Any rule applying a statutory ceiling/threshold/bracket must: take the periodic (monthly) base ×12 → apply the annual ceiling/scale/bracket → ÷12 back to periodic.
+- **Ceilings — cumulative, not ×12 (AD-24/AD-20; supersedes the old annualisation rule, 2026-07-08).** SVB premiums with an **annual** ceiling (AOV/AWW, BVZ, AVBZ) are computed **cumulatively**: premium = rate × min(year-to-date premie-loon, annual ceiling) − premium already withheld this year — never ×12→÷12 (which mis-fires when a once-yearly lump lands in one month). The shared premium bases (`*_PREM_INC`) stay **uncapped** (the AOV 1% surcharge needs the excess above the ceiling); each premium rule applies its own ceiling. ZV/OV use the **monthly** cap directly. Loonbelasting reads the period-specific lb-maandtabel directly (AD-20) — no annualisation anywhere.
 - **Dated-rate authority — rates are data, never literals.** *All* statutory rates and ceilings (including every SVB premium, sliding-scale bands, the verwervingskosten forfeit, and basiskorting) live in `hr.tax.bracket` as **append-only** dated records (expire via `valid_to`, insert a new `valid_from`; never delete). Read them via `compute_tax()` / dated lookups. **Decided (AD-5):** the v3.0D salary-rule *listings* hardcode premium literals (9.3%, 6.5%, 9.5%, ceilings, 606247.08, 41.67, 2915) — these must be **refactored to data-driven lookups**, because rate changes must not require a code deploy. This requires a **seed change**: expand `hr.tax.bracket.tax_type` to granular per-(insurance, payer) values (`bvz_emp`, `bvz_er`, `avbz_emp`, `avbz_er`, `aov_aww_emp`, `aov_aww_er`, `aov_aww_surcharge`, `zv`, `ov`, `loonbelasting`, `bijzondere_beloning`) with a defined read contract per type (progressive / flat-with-ceiling / sliding).
 - **Enable/disable gate + never-gate list.** Each premium/tax rule checks its `hr.employee.wage.line.enabled`; if `False`, set `result = 0.00` and skip its logic (downstream gets `0.00`, never an error/stale value). The **never-gate** rules always execute regardless of flags because they are shared bases/outputs: `BVZ_PREM_INC`(20), `AOV_PREM_INC`(50), `TAX_INC`(80), `LOONBEL_RAW`(90), `NET`(130), `TOTAL_ER_COST`(150).
 - **`active` vs `enabled` are independent.** `active=False` hides from UI **and** excludes from calc. `enabled=False` keeps the line **visible for audit** but returns `0.00`. A statutory exemption for audit = `active=True, enabled=False`.
@@ -46,8 +57,8 @@ No blocking questions remain for v1.0R. The other open questions (OQ-01..OQ-10) 
 
 ## Conventions when code is added
 
-- Manifest: version `19.0.0.1.0`, category `Human Resources/Payroll` (matches all shipped `l10n_*_hr_payroll` modules — keeps the future official-localization track open; supersedes the v3.0D `Accounting/Localizations/Payroll`, decided 2026-07-07), license `OPL-1`, country `cw`, installable, not auto-installed. Direct depends: `hr`, `hr_contract`, `hr_holidays`, `hr_payroll`, `hr_payroll_account`, `hr_attendance`.
-- Salary-rule `amount_python_compute` context: `employee`, `contract`, `payslip`, `worked_days`, `inputs`, `categories`, `rules`, `env` — must assign `result`. Hidden intermediates carry `appears_on_payslip = False`.
+- Manifest: version `19.0.0.1.0`, category `Human Resources/Payroll` (matches all shipped `l10n_*_hr_payroll` modules — keeps the future official-localization track open; supersedes the v3.0D `Accounting/Localizations/Payroll`, decided 2026-07-07), license `OPL-1`, country `cw` (manifest key `countries: ['cw']`), installable, not auto-installed. Direct depends: `hr`, `hr_holidays`, `hr_payroll`, `hr_payroll_account`, `hr_attendance` — **no `hr_contract`**: the module was removed in Odoo 19; contracts are absorbed into core `hr` as the `hr.version` model (extend `hr.version`, not `hr.contract`; decided 2026-07-07, review D1).
+- Salary-rule `amount_python_compute` context: `employee`, `version` (the `hr.version` record — Odoo 19 replaces the v3.0D `contract` variable), `payslip`, `worked_days`, `inputs`, `categories`, `rules`, `env` — must assign `result`. Hidden intermediates carry `appears_on_payslip = False`.
 - UI strings and model menus are Dutch (e.g. Salarisadministratie → Configuratie → Tarieven); keep statutory terms in their official form (`basiskorting`, not `basisaftrek`).
 - Working-hours divisor is the fixed constant **173.33 hrs/month** (8h × 5d × 52wk ÷ 12).
 
