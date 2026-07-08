@@ -113,12 +113,12 @@ The reports layer holds the QWeb PDF templates (payslip A-01, declarations B-01 
 
 ## Module Dependencies
 
-Direct dependencies declared in `__manifest__.py` are `hr`, `hr_contract`, `hr_holidays`, `hr_payroll`, `hr_payroll_account`, and `hr_attendance`. Odoo resolves the transitive dependencies automatically: `resource` (drives working-hour normalization and absence handling), `mail` (provides `mail.thread` and `mail.activity.mixin` for chatter and audit trails), and `account` (provides `account.account`, `account.journal`, and `account.move`).
+Direct dependencies declared in `__manifest__.py` are `hr`, `hr_holidays`, `hr_payroll`, `hr_payroll_account`, and `hr_attendance`. (`hr_contract` was dropped 2026-07-07: the module no longer exists in Odoo 19 — contracts are absorbed into core `hr` as the `hr.version` model.) Odoo resolves the transitive dependencies automatically: `resource` (drives working-hour normalization and absence handling), `mail` (provides `mail.thread` and `mail.activity.mixin` for chatter and audit trails), and `account` (provides `account.account`, `account.journal`, and `account.move`).
 
 The full installation order is:
 
 ```
-base → mail → resource → hr → hr_contract → hr_holidays
+base → mail → resource → hr → hr_holidays
 → hr_attendance → account → hr_payroll → hr_payroll_account
 → l10n_cw_hr_payroll
 ```
@@ -179,10 +179,10 @@ Each salary rule's `amount_python_compute` block executes with the following con
 | Name | Meaning |
 |---|---|
 | `employee` | `hr.employee` record |
-| `contract` | `hr.contract` record |
+| `version` | `hr.version` record (Odoo 19 successor of the v3.0D `contract`/`hr.contract`; the localdict exposes `version`, not `contract`) |
 | `payslip` | `hr.payslip` record |
-| `worked_days` | Worked-days object, accessed by code (e.g. `worked_days.WORK100.number_of_hours`) |
-| `inputs` | Payslip inputs, accessed by code (e.g. `inputs.PENSION_EMP.amount`) |
+| `worked_days` | Dict of worked-days lines keyed by code (Odoo 19 — plain dict, no attribute access; e.g. `worked_days['WORK100'].number_of_hours`, guard membership first) |
+| `inputs` | Dict of payslip input lines keyed by code (Odoo 19 — plain dict, no attribute access; guard absent inputs: `inputs['PENSION_EMP'].amount if 'PENSION_EMP' in inputs else 0.0`) |
 | `categories` | Accumulated category totals (e.g. `categories.BASIC`, `categories.ALW`, `categories.DED`, `categories.ER`) |
 | `rules` | Prior rule results (e.g. `rules.BVZ_PREM_INC.amount`) |
 | `env` | Odoo environment for ORM queries (e.g. `env['hr.tax.bracket'].search(...)`) |
@@ -222,7 +222,7 @@ The complete v1.0R sequence (Cessantia excluded — see Authoring Assumptions) i
 
 ## Step Design Detail
 
-This section describes the intended computation of each step. Annualisation is used wherever a statutory ceiling or threshold is expressed as an annual figure: the periodic (monthly) base is multiplied by 12, the ceiling or scale is applied, and the result is divided back by 12.
+This section describes the intended computation of each step. Ceiling handling follows **AD-24** (2026-07-08, superseding the former ×12→÷12 annualisation): premiums with an **annual** ceiling (AOV/AWW, BVZ, AVBZ) are computed **cumulatively** — premium = rate × min(year-to-date premie-loon, annual ceiling) − premium already withheld this year — while the shared premium bases stay uncapped. The ZV/OV **monthly** cap and the period-specific lb-maandtabel are applied directly; no rule annualises.
 
 ### Step 1 — Total Loon and Overtime (Seq 10–14)
 
@@ -230,27 +230,27 @@ This section describes the intended computation of each step. Annualisation is u
 
 ### Step 2 — BVZ Premium Income Base (Seq 20)
 
-The BVZ base derives from `categories.BASIC + categories.ALW` (overtime included) per **AD-14** — the verwervingskosten forfeit is **not** deducted here (AD-14 moves it to `TAX_INC` only). The base is applied **cumulatively** against the annual BVZ ceiling of XCG 150,000/year per **AD-24** (year-to-date premie-loon capped at the ceiling, minus premium already withheld), not by ×12 annualisation. This rule is a shared intermediate and always executes. *(Resolved — F1: per the Landsverordening BVZ (P.B. 2013, no. 3) Art. 1.1(o) → Landsverordening inkomstenbelasting 1943 Art. 3(4), the BVZ premiegrondslag is the* zuivere opbrengst van arbeid *before persoonlijke aftrekposten, so the employee pension premium is **not** deducted here — confirming the AD-14 base. See `implementation-readiness-report-2026-07-04.md` F1.)*
+The BVZ base derives from `categories.BASIC + categories.ALW` (overtime included) per **AD-14** — the verwervingskosten forfeit is **not** deducted here (AD-14 moves it to `TAX_INC` only). The base itself is **uncapped**; the ceiling is applied in the premium rules (Steps 3–4) using the **AD-24** cumulative method: premium = rate × min(year-to-date premie-loon, annual ceiling XCG 150,000) − premium already withheld this year. This rule is a shared intermediate and always executes. *(Resolved — F1: per the Landsverordening BVZ (P.B. 2013, no. 3) Art. 1.1(o) → Landsverordening inkomstenbelasting 1943 Art. 3(4), the BVZ premiegrondslag is the* zuivere opbrengst van arbeid *before persoonlijke aftrekposten, so the employee pension premium is **not** deducted here — confirming the AD-14 base. See `implementation-readiness-report-2026-07-04.md` F1.)*
 
 ### Steps 3–4 — BVZ Employer and Employee (Seq 30, 40)
 
-The employer pays a flat 9.3% and the employee a flat 4.3% of the BVZ base, capped at the BVZ ceiling (XCG 150,000/year). Per the official SVB-Tabel-2026 there is no income-graduated employee scale (the earlier "sliding 0%–4.3%" is dropped, AD-5/AD-22). The employee amount is returned as a negative (deduction) value; rates and ceiling are read from the per-year `hr.svb.parameters` record.
+The employer pays a flat 9.3% and the employee a flat 4.3% of the BVZ base, each applying the annual BVZ ceiling (XCG 150,000/year) cumulatively per AD-24 (rate × min(YTD premie-loon, ceiling) − premium already withheld). Per the official SVB-Tabel-2026 there is no income-graduated employee scale (the earlier "sliding 0%–4.3%" is dropped, AD-5/AD-22). The employee amount is returned as a negative (deduction) value; rates and ceiling are read from the per-year `hr.svb.parameters` record.
 
 ### Step 5 — AOV/AWW/AVBZ Premium Income Base (Seq 50)
 
-The AOV base derives from `categories.BASIC + categories.ALW` (overtime included) per **AD-14** — the shared base for AOV/AWW, the above-ceiling surcharge, and AVBZ — and always executes, applied **cumulatively** against each premium's annual ceiling per **AD-24**. Under AD-14 the verwervingskosten forfeit is not deducted here (it touches `TAX_INC` only), and the beschikking no longer reduces the premium base (it survives as an employee field for Lei di Bion approval, AD-23). *(Resolved — F1: by the same reasoning as BVZ (premiegrondslag =* zuivere opbrengst van arbeid *before persoonlijke aftrekposten), the employee pension premium (werknemersdeel) is **not** deducted from the AOV/AWW base either — to be confirmed under the Landsverordening AOV/AWW; the AD-14 base already excludes it. See `implementation-readiness-report-2026-07-04.md` F1.)*
+The AOV base derives from `categories.BASIC + categories.ALW` (overtime included) per **AD-14** — the shared base for AOV/AWW, the above-ceiling surcharge, and AVBZ — and always executes. The base itself is **uncapped** (the 1% surcharge, Seq 62, needs the excess above the ceiling); each premium rule applies its own annual ceiling cumulatively per **AD-24**. Under AD-14 the verwervingskosten forfeit is not deducted here (it touches `TAX_INC` only), and the beschikking no longer reduces the premium base (it survives as an employee field for Lei di Bion approval, AD-23). *(Resolved — F1: by the same reasoning as BVZ (premiegrondslag =* zuivere opbrengst van arbeid *before persoonlijke aftrekposten), the employee pension premium (werknemersdeel) is **not** deducted from the AOV/AWW base either — the base is settled; verifying the citation under the Landsverordening AOV/AWW itself is a non-blocking documentation follow-up. See `implementation-readiness-report-2026-07-04.md` F1.)*
 
 ### Step 6 — AOV/AWW (Seq 60, 61, 62)
 
-AOV and AWW are modeled as one combined premium. The employee pays 6.5% (AOV 6% + AWW 0.5%) on the base up to the XCG 100,000/year ceiling. The employer pays 9.5% (AOV 9% + AWW 0.5%) on the same capped base. For income above the ceiling, the employee pays an additional 1% surcharge (`AOV_AWW_1PCT`) on the excess only. The surcharge is zero for most employees and ensures compliance with the Landsverordening for high earners.
+AOV and AWW are modeled as one combined premium. The employee pays 6.5% (AOV 6% + AWW 0.5%) on the base up to the XCG 100,000/year ceiling, applied cumulatively per AD-24. The employer pays 9.5% (AOV 9% + AWW 0.5%) on the same cumulatively capped basis. For income above the ceiling, the employee pays an additional 1% surcharge (`AOV_AWW_1PCT`) on the excess only. The surcharge is zero for most employees and ensures compliance with the Landsverordening for high earners.
 
 ### Step 7 — AVBZ (Seq 70, 71)
 
-AVBZ uses the AOV base capped at the AVBZ ceiling of XCG 606,247.08/year. Per the official SVB-Tabel-2026 the employee rate is a **flat 1.5%** and the employer rate a flat 0.5% — there is no low-income threshold (the earlier "0.5%/1.5% at XCG 29,897.44" is dropped, AD-5/AD-22; 29,897.44 was in fact the prior-year basiskorting breakpoint). Rates and ceiling are read from the per-year `hr.svb.parameters` record.
+AVBZ uses the AOV base, applying the AVBZ ceiling of XCG 606,247.08/year cumulatively per AD-24. Per the official SVB-Tabel-2026 the employee rate is a **flat 1.5%** and the employer rate a flat 0.5% — there is no low-income threshold (the earlier "0.5%/1.5% at XCG 29,897.44" is dropped, AD-5/AD-22; 29,897.44 was in fact the prior-year basiskorting breakpoint). Rates and ceiling are read from the per-year `hr.svb.parameters` record.
 
 ### Steps 8–10 — Loonbelasting (Seq 80, 90, 100)
 
-`TAX_INC` is the fiscal wage: gross less the verwervingskosten forfeit, the absolute AOV/AWW employee premium, and the employee pension premium (`inputs.PENSION_EMP`). The pension premium is a loonbelasting aftrekpost applied here **only** — not to the SVB premie-loon (F1, in scope for v1.0R, 2026-07-04). `LOONBEL_RAW` looks up the raw loonbelasting directly from the official Belastingdienst lb-maandtabel (`hr.loonbelasting.tabel`) for the `TAX_INC` value and the payslip period-end date — no annualisation (the table is already period-specific). For wages above the table ceiling (XCG 16,670/month) the above-ceiling extension applies: `ceiling_tax + (TAX_INC − ceiling) × 46.5%` (MR 144 § Algemeen). `LOONBEL` then applies the toeslagen as monetary deductions from the raw tax amount — not as reductions to taxable income — flooring the result at zero and returning it as a negative (deduction) value. Because the maandtabel is exclusief basiskorting, the basiskorting (XCG 2,915/year — the loonbelasting withholding basiskorting per AD-13 and the official 2026 *Loonbelastingverklaring*; the 3,247.35 figure is an inkomstenbelasting amount, not the loonbelasting basiskorting) is a required separate deduction applied here automatically to all employees; the remaining toeslagen are stored as annual amounts on employee fields and divided by 12.
+`TAX_INC` is the fiscal wage: the AD-14 earnings base (`categories.BASIC + categories.ALW`, excluding earnings flagged `is_bijzondere_beloning` or `is_lei_di_bion_exempt`) less the verwervingskosten forfeit, the absolute AOV/AWW employee premium, and the employee pension premium (payslip input `PENSION_EMP`, read guarded — see Python Computation Context). The pension premium is a loonbelasting aftrekpost applied here **only** — not to the SVB premie-loon (F1, in scope for v1.0R, 2026-07-04). `LOONBEL_RAW` looks up the raw loonbelasting directly from the official Belastingdienst lb-maandtabel (`hr.loonbelasting.tabel`) for the `TAX_INC` value and the payslip period-end date — no annualisation (the table is already period-specific). For wages above the table ceiling (XCG 16,670/month) the above-ceiling extension applies: `ceiling_tax + (TAX_INC − ceiling) × 46.5%` (MR 144 § Algemeen). `LOONBEL` then applies the toeslagen as monetary deductions from the raw tax amount — not as reductions to taxable income — flooring the result at zero and returning it as a negative (deduction) value. Because the maandtabel is exclusief basiskorting, the basiskorting (XCG 2,915/year — the loonbelasting withholding basiskorting per AD-13 and the official 2026 *Loonbelastingverklaring*; the 3,247.35 figure is an inkomstenbelasting amount, not the loonbelasting basiskorting) is a required separate deduction applied here automatically to all employees; the remaining toeslagen are stored as annual amounts on employee fields and divided by 12.
 
 ### Step 11 — Extra Tax on Bijzondere Beloningen (Seq 110)
 
@@ -304,9 +304,9 @@ The module extends three standard models and introduces five new ones.
 
 Extended with a `singleton` boolean (default `True`) that controls whether a wage component may be applied more than once to the same employee. Every wage component is defined here as a Tier 1 global rule.
 
-### hr.contract
+### hr.version
 
-Extended with `l10n_cw_ov_percentage` (Float), the OV gevarenklasse rate fixed per employee for the duration of the contract. In the detailed design phase this interim Float is intended to be replaced by a Many2one to a dedicated `l10n_cw.svb.industry` model holding the official SVB gevarenklasse list (deferred — see roadmap).
+(Odoo 19: the `hr.version` model in core `hr` replaces the former `hr.contract` — the v3.0D "contract" extension target.) Extended with `l10n_cw_ov_percentage` (Float), the OV gevarenklasse rate fixed per employee for the duration of the contract. In the detailed design phase this interim Float is intended to be replaced by a Many2one to a dedicated `l10n_cw.svb.industry` model holding the official SVB gevarenklasse list (deferred — see roadmap).
 
 ### hr.employee
 
