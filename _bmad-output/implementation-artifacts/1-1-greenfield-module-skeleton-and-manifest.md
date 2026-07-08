@@ -4,7 +4,7 @@ baseline_commit: c136873ab959b86f7ee62838b06009e414c4bc09
 
 # Story 1.1: Greenfield module skeleton and manifest
 
-Status: review
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -17,7 +17,7 @@ so that the Curaçao payroll framework is available without errors.
 ## Acceptance Criteria
 
 1. **Given** a clean Odoo 19 Enterprise database with `hr_payroll` installed, **When** I install `l10n_cw_hr_payroll`, **Then** it installs without error and reports version `19.0.0.1.0`, country `cw`, license `OPL-1`, `application=False`, and `auto_install=False`. *(AR014)*
-2. **Given** the manifest, **When** inspected, **Then** `depends` = `hr, hr_contract, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance` with **no theme dependency added**. *(AR014)*
+2. **Given** the manifest, **When** inspected, **Then** `depends` = `hr, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance` with **no theme dependency added**. *(AR014 — amended per review D1, 2026-07-07: `hr_contract` removed in Odoo 19; contracts absorbed into core `hr` as `hr.version`.)*
 3. **Given** the package layout, **When** inspected, **Then** directories follow the three-layer boundaries (Localization ← Application ← Reports) per Tech Design §13 and AD-11. *(AR001)*
 4. **Given** the freshly installed skeleton, **Then** no statutory rate, ceiling, or threshold is hard-coded in Python. *(AR006)*
 
@@ -35,12 +35,29 @@ so that the Curaçao payroll framework is available without errors.
   - [x] `data` list empty; no `assets` entry yet (guardrail honored).
 - [x] **Task 3 — Confirm three-layer boundary mapping** (AC: 3)
   - [x] Directory-to-layer mapping (AD-11) respected; boundary documented in `__manifest__.py` comments and this story's Dev Notes. No cross-layer imports exist yet.
-- [x] **Task 4 — Verify clean install and the no-hardcode principle** (AC: 1, 4)
-  - [x] Live install on a clean Odoo 19 Enterprise DB → **delegated to PO** (user instruction 2026-07-07: "I will take care of that"). Dev-side scope complete; PO confirms the Apps entry shows version `19.0.0.1.0`, license `OPL-1`, country `cw`, not an Application.
-  - [x] Confirmed no Python statutory literals (grep of `*.py` — skeleton has none). *(AC4 met)*
-  - [x] Manifest validity asserted statically via `ast.literal_eval` (all AC1/AC2 fields — see Debug Log).
-- [x] **Task 5 — Verification: live install smoke-test** (AC: 1)
-  - [x] `odoo-bin -i l10n_cw_hr_payroll -d <db> --test-enable --stop-after-init` → **delegated to PO** (runs in own Odoo 19 Enterprise env; command documented in Completion Notes). Not executable in this sandbox (no Odoo core/Postgres).
+- [ ] **Task 4 — Verify clean install and the no-hardcode principle** (AC: 1, 4)
+  - [ ] **PO verification (open):** live install on a clean Odoo 19 Enterprise DB — delegated to PO (2026-07-07: "I will take care of that"); PO confirms the Apps entry shows version `19.0.0.1.0`, license `OPL-1`, country `cw`, not an Application. *(Run with the post-review manifest — 5 depends, no `hr_contract`.)*
+  - [x] Dev-side: confirmed no Python statutory literals (grep of `*.py` — skeleton has none). *(AC4 met)*
+  - [x] Dev-side: manifest validity asserted statically via `ast.literal_eval` (all AC1/AC2 fields — see Debug Log; re-asserted after the category and D1 changes).
+- [ ] **Task 5 — Verification: live install smoke-test** (AC: 1)
+  - [x] Dev-side: smoke-test command documented; not executable in this sandbox (no Odoo core/Postgres).
+  - [ ] **PO verification (open):** run `odoo-bin -i l10n_cw_hr_payroll -d <db> --test-enable --stop-after-init` in own Odoo 19 Enterprise env and report the result.
+
+### Review Findings
+
+- [x] [Review][Decision] `hr_contract` does not exist in Odoo 19 — **RESOLVED (fix now, PO-confirmed 2026-07-07)**. Double evidence: live-instance screenshot (model `hr.version`, Base Object, in apps `hr, hr_sign`) + enterprise-19.0 source (no `hr.contract` model anywhere; `hr.version` carries `contract_date_start/end`, `wage`, `wage_type`; all peer localizations extend `hr.version`; salary-rule localdict exposes `version`, not `contract`). Fix applied across manifest, CLAUDE.md (depends + compute context), PRD (§Module Dependencies, install order, Python-context table, §Data Models `hr.contract`→`hr.version`), epics AR014 + Story 1.1 AC2 + Story 1.9 (EN+NL), this story's AC2 + Dev Notes.
+- [x] [Review][Patch] Tasks 4/5 checkboxes overclaim unexecuted live-install verification — restructure into dev-side [x] + PO-side [ ] items [this story file]
+- [x] [Review][Patch] File List omits CLAUDE.md, PRD, sprint-status.yaml edits claimed by this story [this story file]
+- [x] [Review][Patch] Note that baseline range c136873..HEAD bundles pre-story planning commits; list the story's own commits (f980702, f791b7f, 58c2c3b) [this story file]
+- [x] [Review][Patch] Document `author` '[COMPANY]'→'Caribware' substitution; harmonize "all 42" claim vs "23 audited" evidence [this story file]
+- [x] [Review][Patch] Stale ×12 annualisation invariant contradicts AD-24 cumulative method — carve out SVB annual ceilings (AD-24) and lb-tabel (AD-20) [CLAUDE.md §Architecture invariants; PRD §Step Design Detail intro]
+- [x] [Review][Patch] Ceiling-cap location ambiguous/wrong: PRD Step 2/5 says the *base* is capped, but `AOV_AWW_1PCT` needs the uncapped base — cap belongs in the premium rules (AD-24), bases stay uncapped; also fix the type-mismatched parenthetical [PRD Steps 2/5]
+- [x] [Review][Patch] `TAX_INC` anchored to undefined "gross" — anchor to the AD-14 earnings base (`categories.BASIC + categories.ALW`, minus flag exclusions) [PRD Step 8; epics Story 2.6 EN+NL]
+- [x] [Review][Patch] `inputs.PENSION_EMP` attribute-style access invalid on Odoo 19 (`inputs` is a plain dict → AttributeError/KeyError when absent) — spec dict-style guarded access + add PENSION_EMP input-type creation to Story 2.6 [PRD §Python Computation Context + Step 8; epics 2.6 EN+NL]
+- [x] [Review][Patch] PRD Step 5 "Resolved… to be confirmed" wording tension; CLAUDE.md says "country `cw`" but the manifest key is `countries` [PRD Step 5; CLAUDE.md]
+- [x] [Review][Defer] "Zuivere opbrengst" citation nuance vs verwervingskosten non-deduction in the premie-loon — legal-wording refinement for the PO; the AD-14 base decision stands [PRD Steps 2/5] — deferred, pre-existing readiness text
+- [x] [Review][Defer] Repo/project name `l10n_cw_hr_payrol` (one *l*) propagated into tracking metadata — renaming the repo/config is the user's call [sprint-status.yaml; repo dir] — deferred, pre-existing
+- [x] [Review][Defer] `countries: ['cw']` hides the module from the Apps UI on non-CW-company databases — expected localization behavior; install via CLI `-i` or set company country [manifest] — deferred, informational
 
 ## Dev Notes
 
@@ -66,7 +83,7 @@ This is the **greenfield skeleton only**: package structure + a valid, installab
     'license':   'OPL-1',
     'countries': ['cw'],
     'depends': [
-        'hr', 'hr_contract', 'hr_holidays',
+        'hr', 'hr_holidays',  # no hr_contract: removed in Odoo 19 (D1)
         'hr_payroll', 'hr_payroll_account', 'hr_attendance',
     ],
     'data': [],          # grows per later story — never list a file that doesn't exist yet
@@ -145,10 +162,14 @@ Claude Opus 4.8 (claude-opus-4-8) with 3 parallel Explore subagents (Enterprise-
 - Install-ordering guardrail honored: `data: []`, no `assets` entry; inline manifest comment explains why (a manifest referencing a not-yet-existing file breaks install).
 - **AC3, AC4: verified.** **AC1, AC2: all statically verifiable properties verified**; the *live* "installs without error on a clean Odoo 19 Enterprise DB" run is **pending the user's environment** (sandbox has no Odoo core/Postgres). Command to run there (adjust community path/db):
   `odoo-bin -d cw_test --addons-path=<community>/addons,/home/nroosje/dev/odoo-sh/enterprise-19.0,/home/nroosje/dev/odoo-poc/l10n_cw_hr_payrol -i l10n_cw_hr_payroll --test-enable --stop-after-init`
-- **Finding RESOLVED (PO decision 2026-07-07):** category changed to `Human Resources/Payroll` — the convention used by all 42 shipped payroll localizations — so the module can join the official payroll-localization track later. Manifest, CLAUDE.md, and PRD updated together; the frozen v3.0D tech design and historical review artifacts intentionally left as-is (superseded, per the Spine's "v3.0D literals are indicative only").
+- **Finding RESOLVED (PO decision 2026-07-07):** category changed to `Human Resources/Payroll` — the category shared by every sampled shipped payroll localization (23 `l10n_*_hr_payroll` manifests audited; 42 modules total carry the category string) — so the module can join the official payroll-localization track later. Manifest, CLAUDE.md, and PRD updated together; the frozen v3.0D tech design and historical review artifacts intentionally left as-is (superseded, per the Spine's "v3.0D literals are indicative only").
 - License `OPL-1` confirmed valid for third-party code (shipped `l10n_ec_reports` uses it); version `19.0.0.1.0` valid (Odoo keeps strings already prefixed `19.0.`), matches the project dev-versioning convention.
 
 ### File List
+
+Note (P3): the baseline range `c136873..HEAD` also contains pre-story planning commits (`6077c4c` epics breakdown, `80ab1f2` readiness report, `0e0cb15` PRD F1–F3) — those are not this story's changes. This story's own commits: `f980702` (scaffold), `f791b7f` (tracking), `58c2c3b` (category docs), plus the post-review fix set (D1 + P1–P9, uncommitted at time of writing).
+
+Note (P4): the Tech Design's `author` placeholder `[COMPANY]` was resolved to `Caribware` (the actual author organization).
 
 - `l10n_cw_hr_payroll/__manifest__.py` (new)
 - `l10n_cw_hr_payroll/__init__.py` (new)
@@ -160,9 +181,18 @@ Claude Opus 4.8 (claude-opus-4-8) with 3 parallel Explore subagents (Enterprise-
 - `l10n_cw_hr_payroll/security/.gitkeep` (new)
 - `l10n_cw_hr_payroll/static/src/scss/.gitkeep` (new)
 - `l10n_cw_hr_payroll/i18n/.gitkeep` (new)
+- `CLAUDE.md` (modified — category convention, D1 depends + `hr.version`, AD-24 ceiling invariant, `countries` key note, spec-sync mandate)
+- `docs/prd/PRD - v3.0D.md` (modified — category, D1 dependencies/context/data-model, AD-24 ceiling wording, `TAX_INC` anchor, guarded dict access)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (new — sprint tracking)
+- `_bmad-output/implementation-artifacts/deferred-work.md` (new — review defers)
+- `_bmad-output/planning-artifacts/Odoo Module Design Epics - EN - v1.0D.md` + `- NL -` (modified — D1 AR014/AC2/Story 1.9; Story 2.6 `TAX_INC` anchor + `PENSION_EMP` input type/guarded access)
+- `_bmad-output/planning-artifacts/architecture/.../ARCHITECTURE-SPINE.md` + `.memlog.md` (modified — D1 `hr.version` sync; summary-row ceiling wording)
 
 ## Change Log
 
 - 2026-07-07: Story 1.1 implementation — module skeleton + manifest created; Tasks 1–3 complete and statically verified; Tasks 4–5 (live Odoo 19 Enterprise install smoke-test) blocked pending user environment (no Odoo core/Postgres in sandbox). Category-convention finding recorded for review.
 - 2026-07-07: PO decision — manifest category changed to `Human Resources/Payroll` (Odoo payroll-localization convention; keeps official-localization track open). Manifest + CLAUDE.md + PRD updated together; manifest re-asserted PASS.
 - 2026-07-07: PO took ownership of the live install smoke-test (Tasks 4–5 delegation). Dev work complete; story moved to `review`. If the PO's install run surfaces an error, the story returns to `in-progress` for fixes.
+- 2026-07-07: Code review (3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor) — 1 decision, 9 patches, 3 defers, 8 dismissed. Review D1 resolved and applied: `hr_contract` dropped from `depends` (module removed in Odoo 19; contracts absorbed into core `hr` as `hr.version`; salary-rule localdict exposes `version`, not `contract`). Spec chain updated together: manifest, CLAUDE.md, PRD, epics EN+NL (AR014, Story 1.1 AC2, Story 1.9), this story. Manifest re-asserted PASS with 5 depends.
+- 2026-07-08: D1 ripple completed into the Architecture Spine + `.memlog` (context `version`, layer table `hr_version.py`, AD-15 example, AD-21 `version.wage × 12`, depends table, seed line); spec-sync discipline made mandatory (CLAUDE.md §Spec-sync discipline + memory).
+- 2026-07-08: All 9 review patches applied — P1 Tasks 4/5 restructured into dev-side [x] / PO-side [ ] (checkbox honesty); P2 File List completed; P3 baseline-range note; P4 author + evidence-count notes; P5 AD-24 supersedes ×12 annualisation (CLAUDE.md invariant, PRD intro, spine summary row); P6 cap moved to premium rules, bases uncapped (PRD Steps 2–7; `AOV_AWW_1PCT` needs uncapped base); P7 `TAX_INC` anchored to the AD-14 base (PRD + epics 2.6 EN/NL); P8 guarded dict access for `inputs`/`worked_days` + `PENSION_EMP` input-type creation added to Story 2.6 (PRD context table + epics EN/NL); P9 Step-5 F1 wording untangled + CLAUDE.md `countries` key note. Status → in-progress pending the two open PO verification items (live install).

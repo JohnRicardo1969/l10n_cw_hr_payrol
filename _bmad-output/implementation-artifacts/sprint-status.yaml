@@ -56,7 +56,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 development_status:
   # ----- Epic 1: Module Foundation, Configuration & Security (v1.0R) -----
   epic-1: in-progress
-  1-1-greenfield-module-skeleton-and-manifest: review
+  1-1-greenfield-module-skeleton-and-manifest: in-progress
   1-2-scoped-theme-and-dutch-i18n-scaffolding: backlog
   1-3-security-roles-and-own-payslip-record-rule: backlog
   1-4-dated-statutory-data-models-and-lookup-methods: backlog
