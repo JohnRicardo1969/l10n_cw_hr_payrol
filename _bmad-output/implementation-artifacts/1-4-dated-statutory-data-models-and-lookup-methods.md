@@ -15,8 +15,8 @@ so that rates and tables are maintained as data and read reproducibly by effecti
 
 1. **Given** the models, **Then** `hr.svb.parameters` (one per year), `hr.tax.bracket` (dated, `tax_type`-keyed), and `hr.loonbelasting.tabel` (header) + `hr.loonbelasting.tabel.lijn` (rows) exist. *(FR017, AR006, AR024)*
 2. **Given** a `tax_type` and a date, **When** `compute_tax` is called, **Then** it returns the dated Belastingdienst scalar rounded to 2 decimals; `lookup_marginal_rate` returns the single bijzondere band rate; `lookup_loonbelasting` returns the periodic raw loonbelasting. *(AR012)*
-3. **Given** multiple lb-tabel headers for a `period_type`+`year`, **When** `lookup_loonbelasting` runs for a date, **Then** it selects active headers with `valid_from ≤ date_to`, ordered by `valid_from` desc then `id` desc. *(AR024)*
-4. **Given** a required record or table missing for the effective date, **Then** a `UserError` is raised (fail-loud), never a silent 0. *(AR021)*
+3. **Given** multiple lb-tabel headers for a `period_type`+`year`, **When** `lookup_loonbelasting` runs for a date, **Then** it selects active headers for the payslip year or the year before with `valid_from ≤ date_to` and `valid_to` empty or `≥ date_to`, ordered by `year` desc, then `valid_from` desc, then `id` desc — the prior year's still-open table is used only until the new year's table is uploaded. *(AR024, FR031; decided 2026-10-04)*
+4. **Given** a required record or table missing for the effective date, **Then** a `UserError` is raised (fail-loud), never a silent 0. For the lb-tabel, "missing" means neither a current-year header nor a still-open prior-year header qualifies. *(AR021)*
 5. **Given** a superseded value, **Then** it is closed via `valid_to` and never deleted (append-only), and schema changes ship migrations preserving history. *(AR023)*
 6. **Given** national statutory data, **Then** these models are global (no `company_id`). *(AR022)*
 
@@ -31,20 +31,24 @@ so that rates and tables are maintained as data and read reproducibly by effecti
   - [ ] Selection helper `@api.model get_params(date)`: among `active=True` records with `year = date.year` AND `valid_from ≤ date` AND (`valid_to` null or `≥ date`), pick latest by `valid_from desc, id desc`. **No prior-year fallback** — a January payslip with no current-year record fails loud (`UserError`) (AD-22).
 - [ ] **Task 3 — `hr.loonbelasting.tabel` (+ `.lijn`) model + lookup** (AC: 1, 2, 3, 4, 5, 6)
   - [ ] Create `models/hr_loonbelasting_tabel.py`: header fields `name`, `period_type` (Selection; v1.0R: `maand`; keep `week`/`dag`/`halvedag`/`quincena`/`kwartaal` values in the selection for v1.1R), `year` (Integer), `valid_from`, `valid_to` (nullable), `active`, `above_ceiling_rate` (Float — 46.5 for 2026; a **header field**, never a code literal), `lijn_ids` One2many. Row model `hr.loonbelasting.tabel.lijn`: `tabel_id`, `wage_from` (Float), `loonbelasting` (Float); unique `(tabel_id, wage_from)`.
-  - [ ] `@api.model lookup_loonbelasting(wage, period_type, date)`: select header per AC3 (active, `period_type` match, `year = date.year`, `valid_from ≤ date`, `valid_to` null or `≥ date`, order `valid_from desc, id desc`, limit 1); lookup key `wage_from = floor(wage / step) * step` (maand step = 5.00); above table ceiling: `ceiling_tax + (wage − ceiling_wage) × above_ceiling_rate/100`; return `round(x, 2)`. Missing header or row → `UserError` naming `period_type` + date (AD-18).
+  - [ ] `@api.model lookup_loonbelasting(wage, period_type, date)`: select header per AC3 (active, `period_type` match, `year in (date.year, date.year - 1)`, `valid_from ≤ date`, `valid_to` null or `≥ date`, order `year desc, valid_from desc, id desc`, limit 1 — the prior-year header is the fallback until the new year's table is uploaded; decided 2026-10-04, AD-20); lookup key `wage_from = floor(wage / step) * step` (maand step = 5.00); above table ceiling: `ceiling_tax + (wage − ceiling_wage) × above_ceiling_rate/100`; return `round(x, 2)`. Missing header or row → `UserError` naming `period_type` + date (AD-18).
 - [ ] **Task 4 — Views, menu, access** (supports FR017 rate maintenance)
   - [ ] List/form views for all three models + menu Salarisadministratie → Configuratie → Tarieven (Dutch labels). Apply the `.cw_theme_prl10n` wrapper class on these module-owned views (UX-DR002; the SCSS exists since Story 1.2).
   - [ ] Add `ir.model.access` rows (per 1.3 convention): Payroll Manager = CRUD; Payroll User = read; others = none.
   - [ ] Wire new files into `models/__init__.py` and the manifest `data` list.
 - [ ] **Task 5 — Tests (first `tests/` package)** (AC: 2, 3, 4)
-  - [ ] Create `tests/__init__.py` + `tests/test_statutory_lookups.py` (`TransactionCase`): scalar lookup by date window; marginal-rate band edges (`income_from ≤ x < income_to`, top band `income_to=0`); lb-tabel version selection (two headers same year → latest `valid_from` wins; tie → highest `id`); above-ceiling formula; `UserError` on missing record for all three lookups; no-prior-year-fallback for `get_params`.
+  - [ ] Create `tests/__init__.py` + `tests/test_statutory_lookups.py` (`TransactionCase`): scalar lookup by date window; marginal-rate band edges (`income_from ≤ x < income_to`, top band `income_to=0`); lb-tabel version selection (two headers same year → latest `valid_from` wins; tie → highest `id`); lb-tabel prior-year fallback (January 2027 with only a still-open 2026 header → 2026 table used; once a 2027 header exists → 2027 wins; 2026 header closed via `valid_to` → `UserError`; only a 2025 header in 2027 → `UserError`); above-ceiling formula; `UserError` on missing record for all three lookups; no-prior-year-fallback for `get_params`.
 
 ## Dev Notes
 
 ### Read contracts (AD-5/AD-20/AD-22 — binding; two authors must encode identically)
 
 - **Three stores by shape:** SVB rates+ceilings → one per-year `hr.svb.parameters` record (each ceiling stored exactly once); bijzondere band records + Belastingdienst scalars → `hr.tax.bracket`; loonbelasting → `hr.loonbelasting.tabel` (the Schijventarief is NOT the withholding instrument and must never be modeled).
-- **Selection rule is identical across all three stores:** among active records valid on the effective date → `valid_from desc, id desc`. Corrections are new records that win by upload order; no mandatory archiving of the old record.
+- **Selection rule — shared core, one deliberate difference per store (decided 2026-10-04):** all three pick among active records valid on the effective date → `valid_from desc, id desc`; corrections are new records that win by upload order; no mandatory archiving of the old record. On top of that core:
+  - `hr.svb.parameters`: `year = date.year` only — **no prior-year fallback** (AD-22).
+  - `hr.loonbelasting.tabel`: `year in (date.year, date.year - 1)`, ordered `year desc` first — the prior year's still-open table is used until the new year's table is uploaded (AD-20, FR031). Older or closed tables → `UserError`.
+  - `hr.tax.bracket`: no year field — a scalar carries over only while its own `valid_to` is open.
+  - Do not harmonise these three rules; the asymmetry is a product-owner decision.
 - **Effective date:** always passed explicitly; in payroll context it is `payslip.date_to` (AD-17). No method may default to `today()` — the v3.0D `compute_tax` defaulting to `today()` is an identified defect; do not copy it.
 - **Data records hold only rates/ceilings/bounds — never arithmetic.** Capping, summing (e.g. `aov_emp + aww_emp`), and de-annualisation live in the salary rules (Epic 2), not in these models.
 - **Rate unit:** every rate field is a percentage (9.3 means 9.3%); the consumer divides by 100. No fractions.
@@ -95,3 +99,7 @@ This story creates the models fresh (no migration needed yet), but the conventio
 ### Completion Notes List
 
 ### File List
+
+## Change Log
+
+- 2026-10-04: AD-20 lb-tabel selection amended (PO decision): prior-year still-open table is the fallback until the new year's table is uploaded; `year = date.year` replaced by `year in (date.year, date.year - 1)` with `year desc` ordering. Updated AC3, AC4, Task 3 lookup bullet, Task 5 tests, and the Dev Notes selection rule. SVB `get_params` keeps no prior-year fallback (AD-22).
