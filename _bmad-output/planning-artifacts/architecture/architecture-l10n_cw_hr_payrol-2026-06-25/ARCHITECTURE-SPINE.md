@@ -312,6 +312,9 @@ flowchart TD
   `period_type` and date) — **never return 0**. This is distinct from AD-6: a *disabled* premium
   deliberately returns 0; *missing statutory data* is a defect that must stop the run, not pass
   silently.
+- **Carve-out (decided 2026-10-04):** the lb-tabel's one-year prior-year fallback (AD-20) is the only
+  sanctioned carry-over of a previous year's statutory data. It returns real table values, never 0,
+  and is not a general fallback for other lookups.
 
 ### AD-19 — Company scoping (multi-company-safe) `[ADOPTED]`
 
@@ -344,13 +347,25 @@ flowchart TD
     `period_type`, `year` (Integer, e.g. 2026), `valid_from`, `valid_to` (nullable), `active`,
     `above_ceiling_rate` (Float; the top marginal rate applied above the table ceiling — 46.5 % for
     2026).
-  - **Selection rule:** `lookup_loonbelasting(wage, period_type, date)` searches for
-    `active=True` headers where `period_type` matches, `year = date.year`,
+  - **Selection rule** *(decided 2026-10-04, superseding the `year = date.year` restriction)*:
+    `lookup_loonbelasting(wage, period_type, date)` searches for
+    `active=True` headers where `period_type` matches, `year ∈ {date.year, date.year − 1}`,
     `valid_from ≤ date`, and `valid_to` is null or `≥ date`, ordered by
-    **`valid_from desc, id desc`, limit 1**. This means: among all versions valid on the
-    payslip date, the one with the latest effective date wins; ties (same `valid_from`,
-    e.g. a retroactive correction uploaded later) are broken by the most recently uploaded
-    record (`id desc`). No mandatory archiving step — the ordering selects automatically.
+    **`year desc, valid_from desc, id desc`, limit 1**. This means: the current year's table
+    wins whenever one exists; among its versions valid on the payslip date, the one with the
+    latest effective date wins; ties (same `valid_from`, e.g. a retroactive correction uploaded
+    later) are broken by the most recently uploaded record (`id desc`). No mandatory archiving
+    step — the ordering selects automatically.
+  - **Prior-year fallback (lb-tabel only, decided 2026-10-04, PO-confirmed; matches FR031):** if
+    the new year's table is not yet uploaded at the first run of the year, the prior year's table
+    is used **provided it is still open** (`valid_to` null or `≥ date`), until the new table is
+    uploaded — from then on the new table wins automatically. A prior-year header closed via
+    `valid_to`, or a table two or more years old, does not qualify → `UserError` (AD-18).
+    Herberekening before close picks up the newly uploaded table automatically; a run already
+    closed on the fallback table is corrected only via controlled reopen + re-close (AD-9).
+    **Deliberate asymmetry — do not harmonise:** SVB parameters never fall back to a prior year
+    (AD-22); `hr.tax.bracket` scalars carry over only through their own open date window (no year
+    filter); only the lb-tabel has this explicit one-year fallback.
   - **Correction handling:** when the Belastingdienst publishes a corrected table for the
     same year, upload it as a new header with the same or a later `valid_from`.
     - Retroactive correction (`valid_from = year-start`): the new record wins for *all*
@@ -366,7 +381,8 @@ flowchart TD
     where `above_ceiling_rate` is the **header field** (46.5 % for 2026) — **not** a code literal, so a
     rate change is a data update, not a deploy (AD-5). *Worked example (Maandtabel 2026, wage 20 000):*
     `4 862.91 + (20 000 − 16 670) × 0.465 = 4 862.91 + 1 548.45 = 6 411.36`.
-  - **Missing table → `UserError`** (AD-18) — never return 0.
+  - **Missing table → `UserError`** (AD-18) — never return 0. "Missing" = neither a current-year
+    header nor a still-open prior-year header qualifies (decided 2026-10-04).
   - **No annualization** — the table is period-specific; the monthly result is used directly (AD-4
     exception).
   - **Effective date:** `payslip.date_to` (AD-17).
@@ -509,13 +525,15 @@ flowchart TD
     `BVZ_EMP`/`BVZ_ER` read `bvz_emp`/`bvz_er`; `AVBZ_EMP`/`AVBZ_ER` read `avbz_emp`/`avbz_er`; `ZV`
     reads `zv`; `OV` reads the contract rate. The AOV and AWW fields are stored separately (as SVB
     publishes them) and **summed** in the rule.
-  - **Selection (matches AD-20 exactly — no silent fallback).** Among `active=True` records with
+  - **Selection (AD-20's core rule, but without AD-20's lb-tabel prior-year fallback — no silent
+    fallback; decided 2026-10-04, superseding "matches AD-20 exactly").** Among `active=True` records with
     `year = payslip.date_to.year` **and** `valid_from ≤ payslip.date_to` **and** (`valid_to` null or
     `≥ payslip.date_to`), pick the latest by `valid_from desc, id desc` (newest version wins; a rare SVB
     correction is a new record selected automatically). A January payslip whose year's record is **not
     yet uploaded** therefore finds **no** record and **fails loud** — it must **never** fall back to the
     prior year's premiums.
-  - **Missing record → `UserError`** (AD-18) — never silently 0, never a prior-year record.
+  - **Missing record → `UserError`** (AD-18) — never silently 0, never a prior-year record (unlike
+    the lb-tabel fallback in AD-20 — deliberate, decided 2026-10-04).
   - **Global scope**, no `company_id` (AD-19); **append-only** (AD-5); superseded records retained for
     audit.
   - **Ceiling application.** The **annual** ceilings (`aov_aww_grens`, `bvz_grens`, `avbz_grens`) are
