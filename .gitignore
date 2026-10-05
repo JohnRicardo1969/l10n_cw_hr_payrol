@@ -129,3 +129,6 @@ _TEMP/
 # AI assistant configs
 .agents
 claude_swarm_supervisor.py
+
+# Documentation MS Word files
+**/*.docx
