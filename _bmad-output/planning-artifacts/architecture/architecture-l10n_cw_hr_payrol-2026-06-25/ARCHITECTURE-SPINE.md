@@ -265,23 +265,18 @@ flowchart TD
 - **Resolution:** overtime-in-base confirmed by the product owner (2026-06-26) — settles the prior open
   question.
 
-### AD-15 — Scoped presentation theming `[ADOPTED]`
+### AD-15 — Default Odoo presentation (no custom theme) `[ADOPTED]`
 
-- **Binds:** all module views/reports and the `cw_theme_prl10n` SCSS.
-- **Prevents:** the theme leaking onto Odoo's own/inherited pages — one developer scoping correctly
-  while another applies the wrapper to an inherited `hr.employee`/`hr.version` view and restyles
-  Odoo's native screens.
-- **Rule:** the module ships an in-module SCSS bundle `static/src/scss/cw_theme_prl10n.scss`, registered
-  via the manifest `assets` key (`web.assets_backend`) — never the `data` list, and **no theme module
-  dependency**. Every rule is scoped under a single `.cw_theme_prl10n` wrapper class, applied **only** to
-  the module's own custom-model views (`hr.tax.bracket`, `hr.wage.component.set`,
-  `hr.employee.wage.line`, CW-owned payslip/run views) — **never** on inherited Odoo-model views. Tokens
-  are CSS variables: light values under `:root` in that file; dark values under `:root` in a second file
-  `static/src/scss/cw_theme_prl10n.dark.scss`, registered in `web.assets_web_dark` *(decided 2026-10-04,
-  superseding the `.o_dark_mode` scope: Odoo 19 has no dark-mode class — it serves the separate
-  `web.assets_web_dark` bundle, extended by `*.dark.scss` files)*. The dark file holds token values only,
-  never style rules. (Reference only, not a
-  dependency: the `cw_theme` module.) Theming is presentation — it computes no statutory amount (AD-11).
+- **Binds:** all module views and reports.
+- **Prevents:** custom styling drifting from Odoo's own look, or leaking onto Odoo's standard and
+  inherited pages.
+- **Rule:** the module ships **no stylesheet**: no `static/src/scss` files, no manifest `assets` entry,
+  no wrapper CSS class and no theme module dependency. Its own views and the inherited Odoo views render
+  with Odoo 19's default look, in light and dark mode. *(Decided 2026-10-05 by the PO, superseding the
+  scoped `cw_theme_prl10n` theme — in-module SCSS under a `.cw_theme_prl10n` wrapper, dark tokens in
+  `web.assets_web_dark` — which Story 1.2 had implemented. Theming may be reconsidered later as a new
+  decision; the superseded rule is recorded in `.memlog.md`.)* Presentation computes no statutory
+  amount (AD-11).
 
 ### AD-16 — Senior-only payslip-distribution gate `[ADOPTED]`
 
@@ -708,7 +703,6 @@ l10n_cw_hr_payroll/
   views/     # forms, menus (incl. hr_loonbelasting_tabel_views.xml)
   report/    # QWeb payslip + declarations (read-only)
   security/  # groups, record rules, ir.model.access.csv
-  static/    # src/scss/cw_theme_prl10n.scss — scoped backend theme (assets bundle, AD-15)
   i18n/      # nl.po
 ```
 
@@ -728,7 +722,7 @@ l10n_cw_hr_payroll/
 | Run lifecycle & close | Application — `hr.payslip.run.action_close()` | AD-9 |
 | Accounting integration | Application → `account.move` | AD-9, AD-10 |
 | Declarations & payslip PDF | Reports | AD-11 |
-| Backend UI theming (`cw_theme_prl10n`) | Application — `static/src/scss` | AD-15, AD-11 |
+| Backend UI presentation (Odoo 19 default look, no stylesheet) | Application — `views/` | AD-15, AD-11 |
 | Security & data protection | Application — `security/` | AD-11, conventions |
 
 ## Deferred
