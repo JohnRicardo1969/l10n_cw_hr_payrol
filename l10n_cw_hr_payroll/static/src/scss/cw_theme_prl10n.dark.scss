@@ -1,0 +1,37 @@
+// Dark-mode values of the cw_theme_prl10n tokens.
+//
+// Odoo 19 serves this file only in the `web.assets_web_dark` bundle, after the
+// light tokens in cw_theme_prl10n.scss, so redefining the tokens here is all
+// that is needed. Keep this file to token values only; style rules belong in
+// cw_theme_prl10n.scss under the `.cw_theme_prl10n` wrapper.
+
+:root {
+    --cw-prl10n-accent: #b6a2f7;
+    --cw-prl10n-accent-hover: #c8b9fa;
+    --cw-prl10n-accent-soft: rgba(182, 162, 247, 0.22);
+
+    --cw-prl10n-card-bg: #1d1a26;
+    --cw-prl10n-surface: #232032;
+    --cw-prl10n-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+
+    --cw-prl10n-input-bg: #2a2536;
+    --cw-prl10n-input-border: #3b3550;
+    --cw-prl10n-input-hover-bg: #322c42;
+    --cw-prl10n-input-hover-border: #4a4366;
+    --cw-prl10n-input-focus-bg: #352f48;
+
+    --cw-prl10n-text: #e7e3f5;
+    --cw-prl10n-label: #c3b8e8;
+    --cw-prl10n-text-muted: #8e87a8;
+
+    --cw-prl10n-border-color: #3b3550;
+    --cw-prl10n-border-light: #2a2536;
+
+    --cw-prl10n-badge-bg: #2a2536;
+    --cw-prl10n-badge-color: #e7e3f5;
+
+    --cw-prl10n-success: #5fbf96;
+    --cw-prl10n-warning: #e0a074;
+    --cw-prl10n-info: #6fb0e0;
+    --cw-prl10n-danger: #e0788c;
+}

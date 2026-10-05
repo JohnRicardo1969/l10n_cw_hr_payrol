@@ -1,0 +1,266 @@
+// Pastel theme for the module's own backend screens (AD-15).
+//
+// Every style rule is nested under `.cw_theme_prl10n`. Each view story adds that
+// class to the root of the views of models this module owns (hr.tax.bracket,
+// hr.wage.component.set, hr.employee.wage.line, the CW payslip/run views). Never
+// put it on inherited Odoo views (hr.employee, hr.version, hr.salary.rule) and
+// never move a rule outside the wrapper: this stylesheet is loaded on every
+// backend page, so an unscoped rule would restyle standard Odoo screens.
+//
+// Palette values are copied from the Caribware cw_theme module rather than
+// depending on it, so the localization installs on its own. The tokens carry a
+// `--cw-prl10n-` prefix so they cannot override cw_theme's `--cw-*` tokens when
+// both modules are installed on the same database.
+//
+// Odoo 19 has no dark-mode CSS class: dark mode loads the separate
+// `web.assets_web_dark` bundle instead. The dark values of these tokens
+// therefore live in cw_theme_prl10n.dark.scss, registered in that bundle.
+
+:root {
+    --cw-prl10n-accent: #8b6df0;
+    --cw-prl10n-accent-hover: #7857ec;
+    --cw-prl10n-accent-soft: rgba(139, 109, 240, 0.18);
+
+    --cw-prl10n-card-bg: #ffffff;
+    --cw-prl10n-surface: #f5f1ff;
+    --cw-prl10n-card-shadow: 0 1px 3px rgba(91, 74, 138, 0.10);
+
+    --cw-prl10n-input-bg: #f3efff;
+    --cw-prl10n-input-border: #e2d9fb;
+    --cw-prl10n-input-hover-bg: #ece5fd;
+    --cw-prl10n-input-hover-border: #d3c6f7;
+    --cw-prl10n-input-focus-bg: #ffffff;
+
+    --cw-prl10n-text: #2b2540;
+    --cw-prl10n-label: #5b4a8a;
+    --cw-prl10n-text-muted: #9a93b5;
+
+    --cw-prl10n-border-color: #e2d9fb;
+    --cw-prl10n-border-light: #efeaff;
+
+    --cw-prl10n-badge-bg: #efeaff;
+    --cw-prl10n-badge-color: #5b4a8a;
+
+    --cw-prl10n-success: #7ed9b0;
+    --cw-prl10n-warning: #f5b78a;
+    --cw-prl10n-info: #86c5f0;
+    --cw-prl10n-danger: #f08a9d;
+}
+
+.cw_theme_prl10n {
+    background: var(--cw-prl10n-card-bg);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--cw-prl10n-card-shadow);
+
+    // `.o_form_sheet` raises specificity above Odoo 19's base rules on
+    // `.o_form_view .o_input` / `.o_field_widget`, which would otherwise win.
+    .o_form_sheet .o_field_widget,
+    .o_form_sheet input:not(.o_input_dropdown):not([type="checkbox"]),
+    .o_form_sheet textarea,
+    .o_form_sheet select {
+        background-color: var(--cw-prl10n-input-bg) !important;
+        border: 1px solid var(--cw-prl10n-input-border) !important;
+        border-radius: 8px !important;
+        padding: 4px 8px !important;
+        color: var(--cw-prl10n-text) !important;
+        transition: all 0.2s ease;
+        box-shadow: none !important;
+
+        &:hover {
+            background-color: var(--cw-prl10n-input-hover-bg) !important;
+            border-color: var(--cw-prl10n-input-hover-border) !important;
+        }
+
+        &:focus {
+            background-color: var(--cw-prl10n-input-focus-bg) !important;
+            border-color: var(--cw-prl10n-accent) !important;
+            outline: none !important;
+            box-shadow: 0 0 0 3px var(--cw-prl10n-accent-soft) !important;
+        }
+
+        &::placeholder {
+            color: var(--cw-prl10n-text-muted);
+        }
+    }
+
+    .o_form_sheet .o_field_char input,
+    .o_form_sheet .o_field_text textarea,
+    .o_form_sheet .o_field_integer input,
+    .o_form_sheet .o_field_float input,
+    .o_form_sheet .o_datepicker input,
+    .o_form_sheet .o_field_datetime input {
+        background-color: var(--cw-prl10n-input-bg) !important;
+    }
+
+    .o_form_sheet .o_field_many2one .o_input_dropdown,
+    .o_form_sheet .o_field_selection select {
+        background-color: var(--cw-prl10n-input-bg) !important;
+        border: 1px solid var(--cw-prl10n-input-border) !important;
+        border-radius: 8px !important;
+        padding: 4px 8px !important;
+    }
+
+    .o_form_label {
+        color: var(--cw-prl10n-label);
+        font-weight: 500;
+        margin-bottom: 6px;
+        font-size: 13px;
+    }
+
+    .o_field_required .o_form_label::after {
+        content: "*";
+        color: var(--cw-prl10n-danger);
+        margin-left: 4px;
+    }
+
+    .o_form_buttons,
+    .o_cp_buttons {
+        button {
+            border-radius: 8px !important;
+            padding: 8px 20px !important;
+            font-weight: 500 !important;
+            transition: all 0.2s ease;
+        }
+    }
+
+    .btn-primary {
+        background-color: var(--cw-prl10n-accent) !important;
+        border-color: var(--cw-prl10n-accent) !important;
+        border-radius: 8px !important;
+
+        &:hover,
+        &:focus {
+            background-color: var(--cw-prl10n-accent-hover) !important;
+            border-color: var(--cw-prl10n-accent-hover) !important;
+            transform: translateY(-1px);
+        }
+    }
+
+    .btn-secondary {
+        background-color: var(--cw-prl10n-input-bg) !important;
+        border: 1px solid var(--cw-prl10n-input-border) !important;
+        color: var(--cw-prl10n-text) !important;
+        border-radius: 8px !important;
+
+        &:hover {
+            background-color: var(--cw-prl10n-input-hover-bg) !important;
+        }
+    }
+
+    textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+
+    .o_field_many2many_tags .badge {
+        background-color: var(--cw-prl10n-badge-bg);
+        color: var(--cw-prl10n-badge-color);
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-weight: 500;
+
+        .fa-times-circle {
+            color: var(--cw-prl10n-text-muted);
+
+            &:hover {
+                color: var(--cw-prl10n-danger);
+            }
+        }
+    }
+
+    .o_statusbar_status .o_statusbar_buttons .btn {
+        background-color: var(--cw-prl10n-input-bg);
+        border: 1px solid var(--cw-prl10n-input-border);
+        color: var(--cw-prl10n-text);
+
+        &.o_selected {
+            background-color: var(--cw-prl10n-accent);
+            border-color: var(--cw-prl10n-accent);
+            color: #ffffff;
+        }
+    }
+
+    .o_notebook {
+        margin-top: 24px;
+
+        .nav-tabs {
+            border-bottom: 2px solid var(--cw-prl10n-border-color);
+
+            .nav-link {
+                border: none;
+                color: var(--cw-prl10n-text-muted);
+                font-weight: 500;
+                padding: 10px 16px;
+
+                &.active {
+                    color: var(--cw-prl10n-accent);
+                    border-bottom: 2px solid var(--cw-prl10n-accent);
+                    background: transparent;
+                }
+
+                &:hover {
+                    border: none;
+                    color: var(--cw-prl10n-label);
+                }
+            }
+        }
+
+        .tab-content {
+            padding: 20px 0;
+        }
+    }
+
+    .o_list_view {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--cw-prl10n-border-color);
+
+        .table {
+            thead th {
+                background-color: var(--cw-prl10n-surface);
+                border-bottom: 1px solid var(--cw-prl10n-border-color);
+                color: var(--cw-prl10n-label);
+                font-weight: 600;
+                padding: 12px;
+            }
+
+            tbody td {
+                padding: 10px 12px;
+                border-top: 1px solid var(--cw-prl10n-border-light);
+                color: var(--cw-prl10n-text);
+            }
+        }
+    }
+
+    .o_kanban_record {
+        border-radius: 12px;
+        border: 1px solid var(--cw-prl10n-border-color);
+        background: var(--cw-prl10n-card-bg);
+        box-shadow: var(--cw-prl10n-card-shadow);
+    }
+
+    .o_field_boolean .form-check-input {
+        background-color: var(--cw-prl10n-input-bg);
+        border: 1px solid var(--cw-prl10n-input-border);
+        border-radius: 4px;
+
+        &:checked {
+            background-color: var(--cw-prl10n-accent) !important;
+            border-color: var(--cw-prl10n-accent) !important;
+        }
+    }
+
+    .dropdown-menu {
+        background-color: var(--cw-prl10n-card-bg);
+        border-color: var(--cw-prl10n-border-color);
+
+        .dropdown-item {
+            color: var(--cw-prl10n-text);
+
+            &:hover {
+                background-color: var(--cw-prl10n-input-hover-bg);
+            }
+        }
+    }
+}

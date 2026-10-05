@@ -20,10 +20,21 @@
     ],
     # Data files are added incrementally by later stories as the referenced files
     # are created. Do NOT list a file here before it exists: Odoo fails to install
-    # a module whose manifest references a missing data/asset file. Likewise, the
-    # 'assets' bundle (web.assets_backend -> cw_theme_prl10n.scss) is added in
-    # Story 1.2 once the stylesheet exists.
+    # a module whose manifest references a missing data/asset file. The same
+    # applies to the 'assets' bundle below.
     'data': [],
+    # The theme is an asset bundle, not a data file (AD-15). Its rules only take
+    # effect inside views carrying the .cw_theme_prl10n class. Odoo 19 switches
+    # to dark mode by serving web.assets_web_dark, so the dark token values go
+    # there instead of behind a CSS class.
+    'assets': {
+        'web.assets_backend': [
+            'l10n_cw_hr_payroll/static/src/scss/cw_theme_prl10n.scss',
+        ],
+        'web.assets_web_dark': [
+            'l10n_cw_hr_payroll/static/src/scss/cw_theme_prl10n.dark.scss',
+        ],
+    },
     'installable': True,
     'application': False,
     'auto_install': False,
