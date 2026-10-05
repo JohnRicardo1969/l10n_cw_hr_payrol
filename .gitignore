@@ -124,7 +124,7 @@ docs/_build/
 ~$*.xlsx
 
 # Temporary files
-_TEMP/
+__TEMP/**
 
 # AI assistant configs
 .agents
