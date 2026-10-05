@@ -276,7 +276,11 @@ flowchart TD
   dependency**. Every rule is scoped under a single `.cw_theme_prl10n` wrapper class, applied **only** to
   the module's own custom-model views (`hr.tax.bracket`, `hr.wage.component.set`,
   `hr.employee.wage.line`, CW-owned payslip/run views) — **never** on inherited Odoo-model views. Tokens
-  are CSS variables with light (`:root`) and dark (`.o_dark_mode`) modes. (Reference only, not a
+  are CSS variables: light values under `:root` in that file; dark values under `:root` in a second file
+  `static/src/scss/cw_theme_prl10n.dark.scss`, registered in `web.assets_web_dark` *(decided 2026-10-04,
+  superseding the `.o_dark_mode` scope: Odoo 19 has no dark-mode class — it serves the separate
+  `web.assets_web_dark` bundle, extended by `*.dark.scss` files)*. The dark file holds token values only,
+  never style rules. (Reference only, not a
   dependency: the `cw_theme` module.) Theming is presentation — it computes no statutory amount (AD-11).
 
 ### AD-16 — Senior-only payslip-distribution gate `[ADOPTED]`
