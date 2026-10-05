@@ -20,7 +20,7 @@ Curaçaose payroll-lokalisatie voor Odoo 19 Enterprise — versie 19.0.0.1.0
 
 ## Overzicht
 
-Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0D Technisch Ontwerp als implementatiereferentie) naar bouwbare epics en stories. Er is geen apart UX-ontwerpdocument: de module gebruikt de standaardschermen van Odoo, alleen uitgebreid waar Odoo-modellen worden uitgebreid, plus een klein in-module stylesheet-thema.
+Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0D Technisch Ontwerp als implementatiereferentie) naar bouwbare epics en stories. Er is geen apart UX-ontwerpdocument: de module gebruikt de standaardschermen van Odoo, alleen uitgebreid waar Odoo-modellen worden uitgebreid, met het standaarduiterlijk van Odoo 19 en zonder eigen stylesheet (besloten 2026-10-05, ter vervanging van het in-module stylesheet-thema).
 
 ## Eisenoverzicht
 
@@ -126,7 +126,7 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 **Manifest en seed-data (Technisch Ontwerp §13):**
 
-- AR014: **Manifest** — afhankelijk van (`hr, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance`; **geen `hr_contract`** — verwijderd in Odoo 19, contracten opgenomen in kern-`hr` als `hr.version`, besloten 2026-07-07) zonder thema-afhankelijkheid; version `19.0.0.1.0`; country `cw`; license `OPL-1`; geen app en niet automatisch geïnstalleerd (`application=False, auto_install=False`); plus een assets-vermelding (`assets`) die het themastylesheet (`static/src/scss/cw_theme_prl10n.scss`) in de backend-bundel (`web.assets_backend`) laadt — zie UX-DR001.
+- AR014: **Manifest** — afhankelijk van (`hr, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance`; **geen `hr_contract`** — verwijderd in Odoo 19, contracten opgenomen in kern-`hr` als `hr.version`, besloten 2026-07-07) zonder thema-afhankelijkheid; version `19.0.0.1.0`; country `cw`; license `OPL-1`; geen app en niet automatisch geïnstalleerd (`application=False, auto_install=False`); geen assets-vermelding (`assets`), omdat de module geen stylesheet levert (besloten 2026-10-05, ter vervanging van de themastylesheet-vermelding — zie UX-DR001).
 - AR015: **Seed-data** — lever het maandstructuurtype (`CWMONTHLY`), de standaard-staf-structuur (`CWSTAFF`), de salarisregelcategorieën, alle CW-salarisregels, het **`hr.svb.parameters`-record van 2026** (één per jaar: alle SVB-premietarieven, de AOV-toeslag en de plafonds), de bijzondere-beloningstariefrecords (zes correcte schijven volgens de officiële PDF van 2026), de Belastingdienst-scalairen (basiskorting 2.915/jr, verwervingskosten 500/jr, toeslagen), plus de lb-maandtabelgegevens van 2026 (≈ 3.335 rijen, `period_type = maand`, `valid_from = 2026-01-01`, via `data/hr.loonbelasting.tabel.lijn.csv`).
 - AR016: **Vertalingen** — lever het Nederlandse interfacevertaalbestand (`i18n/nl.po`).
 
@@ -137,12 +137,12 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 ### UX-ontwerpeisen
 
-De module gebruikt de standaardschermen van Odoo (lijst-/formulier-/menuweergaven), met een custom gescopeerd stylesheet-thema voor de eigen schermen van de module. Referentie (alleen-lezen, geen afhankelijkheid): `/home/nroosje/dev/odoo-sh/odoo-cbw-ent/service-business-suite/cw_theme`.
+De module gebruikt de standaardschermen van Odoo 19 (lijst-/formulier-/menuweergaven) met het standaarduiterlijk van Odoo: geen eigen stylesheet, thema of wrapper-klasse *(besloten 2026-10-05 door de PO, ter vervanging van het gescopeerde `cw_theme_prl10n`-thema; een thema kan later als aparte beslissing worden heroverwogen)*.
 
-- UX-DR001: Lever een gescopeerd stylesheet-thema genaamd `cw_theme_prl10n`, gebundeld **binnen** de module als stylesheetbestand (`static/src/scss/cw_theme_prl10n.scss`) en geladen via de manifest-assets-vermelding (`assets`) in de backend-bundel (`web.assets_backend`) — niet de data-lijst; het bestand met de kleuren voor de donkere modus (`static/src/scss/cw_theme_prl10n.dark.scss`) gaat in de donkere bundel (`web.assets_web_dark`). Geen nieuwe module en geen nieuwe afhankelijkheid.
-- UX-DR002: Plaats **elke** themaregel onder één wrapper-CSS-klasse (`.cw_theme_prl10n`), alleen toegepast op de eigen modelschermen van de module (de Belastingschijf-, Looncomponentset- en Medewerker-loonregel-weergaven, en CW-eigen loonstrook-/runweergaven en -rapporten). Voeg de wrapper **nooit** toe aan uitgebreide Odoo-weergaven (Medewerker, Contract, Salarisregel) — Odoo's eigen pagina's moeten er ongewijzigd uitzien.
-- UX-DR003: Definieer de pastelkleuren als CSS-variabelen voor lichte modus (de paginaroot, `:root`) en donkere modus (`:root` in het donkere-modusbestand `cw_theme_prl10n.dark.scss`, dat Odoo 19 alleen via zijn donkere bundel `web.assets_web_dark` laadt — Odoo 19 heeft geen donkere-modus-CSS-klasse; besloten 2026-10-04, ter vervanging van `.o_dark_mode`), met hergebruik van het palet van cw_theme (lavendel/violet accent; mint/perzik/lucht/roze ondersteunende tinten). De kleuren worden naar deze module gekopieerd; cw_theme blijft alleen een referentie, geen afhankelijkheid.
-- UX-DR004 (uitgesteld): Portalpaginastyling (de portal-tegenhanger in cw_theme, `.cw-portal`) valt buiten scope voor v1.0R en wordt heroverwogen bij distributie van loonstroken (OQ-01); alleen backend-styling wordt in v1.0R geleverd.
+- UX-DR001: *Vervallen 2026-10-05:* geen eigen stylesheet; de module levert geen `static/src/scss`-bestanden en geen `assets`-vermelding.
+- UX-DR002: *Vervallen 2026-10-05:* geen wrapper-CSS-klasse. De eigen weergaven van de module en de uitgebreide Odoo-weergaven (Medewerker, Contract, Salarisregel) gebruiken allemaal het standaarduiterlijk van Odoo 19.
+- UX-DR003: *Vervallen 2026-10-05:* geen eigen kleurenpalet; lichte en donkere modus zijn die van Odoo 19 zelf.
+- UX-DR004: *Vervallen 2026-10-05:* ook geen portalstyling; portalpagina's (als distributie van loonstroken via het portal ooit wordt gebouwd, OQ-01) gebruiken het standaarduiterlijk van Odoo.
 
 ### FR-dekkingskaart
 
@@ -187,9 +187,9 @@ De module gebruikt de standaardschermen van Odoo (lijst-/formulier-/menuweergave
 ## Epic-lijst
 
 ### Epic 1: Modulefundament, Configuratie & Beveiliging
-Een salarisadministrateur kan de module installeren, alle wettelijke tarieven en tabellen laden en onderhouden, herbruikbare looncomponentsets opbouwen, ze aan medewerkers toewijzen, fiscale gegevens van medewerker en contract vastleggen, en werken onder least-privilege rollen — alles wat nodig is voordat een loonstrook wordt berekend. Zet het greenfield moduleskelet op, het drie-lagen looncomponentmodel, de gedateerde wettelijke gegevensstores (met CSV-import en 2026-seed-data), het per-jaar `hr.wage.component.ytd`-model (leeg), het gescopeerde thema, en de Nederlandse vertaling.
+Een salarisadministrateur kan de module installeren, alle wettelijke tarieven en tabellen laden en onderhouden, herbruikbare looncomponentsets opbouwen, ze aan medewerkers toewijzen, fiscale gegevens van medewerker en contract vastleggen, en werken onder least-privilege rollen — alles wat nodig is voordat een loonstrook wordt berekend. Zet het greenfield moduleskelet op, het drie-lagen looncomponentmodel, de gedateerde wettelijke gegevensstores (met CSV-import en 2026-seed-data), het per-jaar `hr.wage.component.ytd`-model (leeg), en de Nederlandse vertaling.
 **Gedekte FR's:** FR015, FR016, FR017, FR019, FR026, FR027, FR029, FR031
-**AR's / UX-DR's:** AR001, AR014, AR015, AR016, AR022, AR023, UX-DR001, UX-DR002, UX-DR003
+**AR's / UX-DR's:** AR001, AR014, AR015, AR016, AR022, AR023 (UX-DR001–UX-DR003 vervallen 2026-10-05)
 
 ### Epic 2: Wettelijke Payroll-berekeningsengine
 Een correcte maandelijkse loonstrook berekent voor elke representatieve medewerker — standaard, BVZ-vrijgesteld, boven het plafond, en met bijzondere beloningen — overeenkomstig de officiële 2026 Belastingdienst/SVB-publicaties binnen XCG 0,02. Implementeert de geordende salarisregelketen en alle wettelijke componenten: brutoloon, overuren, de SVB-premies (BVZ, AOV/AWW, AVBZ, ZV/OV), loonbelasting met heffingskortingen, bijzondere beloningen, Lei di Bion-vrijgestelde overuren, nettoloon, werkgeverskosten, en de aan/uit-poort. Berekent één loonstrook onafhankelijk van de batch-levenscyclus.
@@ -229,15 +229,17 @@ zodat het Curaçaose payroll-raamwerk zonder fouten beschikbaar is.
 
 ### Story 1.2: Gescopeerd thema en Nederlandse i18n-opzet
 
+*Themadeel vervallen 2026-10-05 (PO-besluit): het thema is na de implementatie verwijderd; de module gebruikt het standaarduiterlijk van Odoo 19. Alleen de Nederlandse i18n-opzet blijft van kracht.*
+
 Als salarisadministrateur,
 wil ik dat de eigen schermen van de module gestyled zijn met het `cw_theme_prl10n`-thema en een Nederlandse interface,
 zodat de module consistent oogt en in het Nederlands leest zonder Odoo's standaardpagina's te wijzigen.
 
 **Acceptatiecriteria:**
 
-- **Gegeven** de manifest-`assets`-vermelding, **wanneer** de backend laadt, **dan** wordt `static/src/scss/cw_theme_prl10n.scss` gebundeld in `web.assets_backend` (niet de data-lijst). (UX-DR001, AR014)
-- **Gegeven** elke themaregel, **dan** is deze genest onder de `.cw_theme_prl10n`-wrapper en alleen toegepast op de eigen modelschermen van de module; uitgebreide Odoo-weergaven (Medewerker, Contract, Salarisregel) blijven ongewijzigd. (UX-DR002)
-- **Gegeven** lichte en donkere modus, **dan** is het pastelpalet gedefinieerd als CSS-variabelen onder `:root` — lichte waarden in `cw_theme_prl10n.scss`, donkere waarden in `cw_theme_prl10n.dark.scss`, geregistreerd in `web.assets_web_dark` (besloten 2026-10-04, ter vervanging van `.o_dark_mode`). (UX-DR003)
+- *(Vervallen 2026-10-05.)* **Gegeven** de manifest-`assets`-vermelding, **wanneer** de backend laadt, **dan** wordt `static/src/scss/cw_theme_prl10n.scss` gebundeld in `web.assets_backend` (niet de data-lijst). (UX-DR001, AR014)
+- *(Vervallen 2026-10-05.)* **Gegeven** elke themaregel, **dan** is deze genest onder de `.cw_theme_prl10n`-wrapper en alleen toegepast op de eigen modelschermen van de module; uitgebreide Odoo-weergaven (Medewerker, Contract, Salarisregel) blijven ongewijzigd. (UX-DR002)
+- *(Vervallen 2026-10-05.)* **Gegeven** lichte en donkere modus, **dan** is het pastelpalet gedefinieerd als CSS-variabelen onder `:root` — lichte waarden in `cw_theme_prl10n.scss`, donkere waarden in `cw_theme_prl10n.dark.scss`, geregistreerd in `web.assets_web_dark` (besloten 2026-10-04, ter vervanging van `.o_dark_mode`). (UX-DR003)
 - **Gegeven** `i18n/nl.po`, **dan** hebben de UI-teksten van de module Nederlandse vertalingen en behouden wettelijke termen hun officiële vorm (bijv. `basiskorting`, niet `basisaftrek`). (AR016)
 
 ### Story 1.3: Beveiligingsrollen en eigen-loonstrook record rule
@@ -307,7 +309,7 @@ zodat ik herbruikbare componentsjablonen en per-medewerker loonregels kan defini
 - **Gegeven** de Tier 1-laag, **dan** draagt `hr.salary.rule` een `singleton`-boolean (standaard `True`) die bepaalt of een looncomponent meer dan eens op dezelfde medewerker mag worden toegepast. (FR015)
 - **Gegeven** een Tier 3-loonregel, **dan** draagt deze `enabled`- en `active`-vlaggen en een `salary_rule_id`-koppeling. (AR007, AR008)
 - **Gegeven** de never-gate basisregels, **dan** ondersteunt het modelontwerp dat ze altijd draaien ongeacht `enabled`. (AR007)
-- **Gegeven** de eigen weergaven van de module, **dan** dragen ze de `.cw_theme_prl10n`-wrapper. (UX-DR002)
+- **Gegeven** de eigen weergaven van de module, **dan** gebruiken ze het standaarduiterlijk van Odoo 19, zonder eigen wrapper-klasse of stylesheet (besloten 2026-10-05, ter vervanging van de `.cw_theme_prl10n`-wrapper). (UX-DR002)
 
 ### Story 1.8: Toepaswizard voor looncomponentsets
 
@@ -332,7 +334,7 @@ zodat per-medewerker wettelijke invoer en de contractperiode worden vastgelegd.
 - **Gegeven** `hr.employee`, **dan** bestaan de heffingskortingsvelden (alleenverdieners-, kinder-, ouderentoeslag) en de beschikking-invoer. (FR019)
 - **Gegeven** `hr.version` (de Odoo 19-opvolger van `hr.contract`), **dan** bestaat een OV%-veld (gevarenklasse) als tijdelijke Float. (FR019)
 - **Gegeven** `hr.version`, **dan** bestaan een verplichte contractstartdatum en een optionele einddatum (`contract_date_start` / `contract_date_end`); vaste contracten zonder einddatum zijn toegestaan. (FR029)
-- **Gegeven** dat dit uitgebreide Odoo-weergaven zijn, **dan** wordt de `.cw_theme_prl10n`-wrapper NIET toegepast. (UX-DR002)
+- **Gegeven** dat dit uitgebreide Odoo-weergaven zijn, **dan** behouden ze het standaarduiterlijk van Odoo 19, zonder eigen styling. (UX-DR002)
 
 ### Story 1.10: Jaar-tot-datum-totalenmodel
 
@@ -345,7 +347,7 @@ zodat cumulatieve premies kunnen worden gelezen en de afsluitactie later totalen
 - **Gegeven** het model, **dan** bestaat `hr.wage.component.ytd` gesleuteld per medewerker, component en jaar, met `ytd_amount`, `last_updated` en `last_payslip_id`. (FR018)
 - **Gegeven** company-scoping, **dan** is het YTD-model company-gescopeerd via `company_id`. (AR022)
 - **Gegeven** v1.0R, **dan** vinden hier nog geen schrijfacties plaats — schrijven gebeurt alleen bij afsluiten van de run (Epic 3) en lezen in de berekeningsengine (Epic 2). (AR010)
-- **Gegeven** de eigen weergave van de module, **dan** draagt deze de `.cw_theme_prl10n`-wrapper. (UX-DR002)
+- **Gegeven** de eigen weergave van de module, **dan** gebruikt deze het standaarduiterlijk van Odoo 19, zonder eigen wrapper-klasse of stylesheet (besloten 2026-10-05, ter vervanging van de `.cw_theme_prl10n`-wrapper). (UX-DR002)
 
 ## Epic 2: Wettelijke Payroll-berekeningsengine
 
@@ -733,7 +735,6 @@ zodat de eindafrekening voldoet aan de Vakantieregeling 1949.
 - UX-DR — UX-ontwerpeis.
 - OQ — Openstaande vraag (Open Question).
 - UI / UX — gebruikersinterface / gebruikerservaring.
-- SCSS / CSS — stylesheet-talen (Sassy CSS / Cascading Style Sheets).
 - PDF / CSV — document- / comma-separated-values-bestandsformaten.
 - Tier 1/2/3 — de drie lagen van het looncomponentmodel (globale regels / sjabloonsets / loonregels per medewerker).
 - v1.0R — de eerste productierelease (manifestversie 19.0.1.0.0).
@@ -780,5 +781,4 @@ zodat de eindafrekening voldoet aan de Vakantieregeling 1949.
 - `CWMONTHLY` / `CWSTAFF` — het maandstructuurtype / de standaard-staf-salarisstructuur.
 - Manifestsleutels — `depends`, `version`, `country`, `license`, `application`, `auto_install`, `assets`, `data`.
 - `web.assets_backend` — Odoo backend-assetbundel.
-- `.cw_theme_prl10n` — thema-wrapper-CSS-klasse; `:root` — token-scope (lichte waarden in `cw_theme_prl10n.scss`, donkere waarden in `cw_theme_prl10n.dark.scss`); `web.assets_web_dark` — de stylesheetbundel van Odoo 19 voor de donkere modus; `.cw-portal` — portal-scope (uitgesteld).
-- `static/src/scss/cw_theme_prl10n.scss` — het themastylesheet; `i18n/nl.po` — het Nederlandse vertaalbestand.
+- `i18n/nl.po` — het Nederlandse vertaalbestand.

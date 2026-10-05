@@ -18,7 +18,7 @@ Curaçao Payroll Localization for Odoo 19 Enterprise — version 19.0.0.1.0
 
 ## Overview
 
-This document breaks the requirements from the PRD and the Architecture Spine (with the v3.0D Technical Design as the implementation reference) into epics and stories that can be built. There is no separate UX design document: the module uses Odoo's standard screens, extended only where Odoo models are extended, plus a small in-module stylesheet theme.
+This document breaks the requirements from the PRD and the Architecture Spine (with the v3.0D Technical Design as the implementation reference) into epics and stories that can be built. There is no separate UX design document: the module uses Odoo's standard screens, extended only where Odoo models are extended, with Odoo 19's default look and no custom stylesheet (decided 2026-10-05, superseding the in-module stylesheet theme).
 
 ## Requirements Inventory
 
@@ -122,7 +122,7 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 
 **Manifest and seed data (Tech Design §13):**
 
-- AR014: **Manifest** — depends on (`hr, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance`; **no `hr_contract`** — removed in Odoo 19, contracts absorbed into core `hr` as `hr.version`, decided 2026-07-07) with no theme dependency added; version `19.0.0.1.0`; country `cw`; license `OPL-1`; not an app and not auto-installed (`application=False, auto_install=False`); plus an assets entry (`assets`) that loads the theme stylesheet (`static/src/scss/cw_theme_prl10n.scss`) into the backend bundle (`web.assets_backend`) — see UX-DR001.
+- AR014: **Manifest** — depends on (`hr, hr_holidays, hr_payroll, hr_payroll_account, hr_attendance`; **no `hr_contract`** — removed in Odoo 19, contracts absorbed into core `hr` as `hr.version`, decided 2026-07-07) with no theme dependency added; version `19.0.0.1.0`; country `cw`; license `OPL-1`; not an app and not auto-installed (`application=False, auto_install=False`); no `assets` entry, because the module ships no stylesheet (decided 2026-10-05, superseding the theme stylesheet entry — see UX-DR001).
 - AR015: **Seed data** — ship the monthly structure type (`CWMONTHLY`), the standard-staff structure (`CWSTAFF`), the salary-rule categories, all CW salary rules, the **2026 `hr.svb.parameters` record** (one per year: all SVB premium rates, the AOV surcharge, and the ceilings), the bijzondere beloningen rate records (6 correct bands per the authoritative 2026 PDF), the Belastingdienst scalars (basiskorting 2,915/yr, verwervingskosten 500/yr, toeslagen), and the 2026 lb-maandtabel entries (≈ 3,335 rows, `period_type = maand`, `valid_from = 2026-01-01`) via CSV seed files.
 - AR016: **Translations** — provide the Dutch interface translation file (`i18n/nl.po`).
 
@@ -133,12 +133,12 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 
 ### UX Design Requirements
 
-The module uses Odoo's standard screens (list/form/menu views), with a custom scoped stylesheet theme for the module's own screens. Reference (read-only, not a dependency): `/home/nroosje/dev/odoo-sh/odoo-cbw-ent/service-business-suite/cw_theme`.
+The module uses Odoo 19's standard screens (list/form/menu views) with Odoo's default look: no custom stylesheet, theme or wrapper class *(decided 2026-10-05 by the PO, superseding the scoped `cw_theme_prl10n` theme; theming may be reconsidered later as a separate decision)*.
 
-- UX-DR001: Provide a scoped stylesheet theme named `cw_theme_prl10n`, bundled **inside** the module as a stylesheet file (`static/src/scss/cw_theme_prl10n.scss`) and loaded through the manifest assets entry (`assets`) into the backend bundle (`web.assets_backend`) — not the data list; its dark-mode token file (`static/src/scss/cw_theme_prl10n.dark.scss`) goes into the dark bundle (`web.assets_web_dark`). No new module and no new dependency.
-- UX-DR002: Put **every** theme rule under one wrapper CSS class (`.cw_theme_prl10n`), applied **only** to the module's own model screens (the Tax Bracket, Wage Component Set, and Employee Wage Line views, and CW-owned payslip/run views and reports). **Never** add the wrapper to extended Odoo views (Employee, Contract, Salary Rule) — Odoo's own pages must look unchanged.
-- UX-DR003: Define the pastel colours as CSS variables for light mode (the page root, `:root`) and dark mode (`:root` in the dark-mode file `cw_theme_prl10n.dark.scss`, which Odoo 19 loads only through its dark bundle `web.assets_web_dark` — Odoo 19 has no dark-mode CSS class; decided 2026-10-04, superseding `.o_dark_mode`), reusing cw_theme's palette (lavender/violet accent; mint/peach/sky/rose support tints). The colours are copied into this module; cw_theme stays a reference only, not a dependency.
-- UX-DR004 (deferred): Portal-page styling (the portal counterpart in cw_theme, `.cw-portal`) is out of scope for v1.0R and revisited with payslip distribution (OQ-01); only backend styling ships in v1.0R.
+- UX-DR001: *Superseded 2026-10-05:* no custom stylesheet; the module ships no `static/src/scss` files and no `assets` entry.
+- UX-DR002: *Superseded 2026-10-05:* no wrapper CSS class. The module's own views and the extended Odoo views (Employee, Contract, Salary Rule) all render with Odoo 19's default look.
+- UX-DR003: *Superseded 2026-10-05:* no custom colour palette; light and dark mode are Odoo 19's own.
+- UX-DR004: *Superseded 2026-10-05:* no portal styling either; portal pages (if payslip distribution through the portal is ever built, OQ-01) use Odoo's default look.
 
 ### FR Coverage Map
 
@@ -183,9 +183,9 @@ The module uses Odoo's standard screens (list/form/menu views), with a custom sc
 ## Epic List
 
 ### Epic 1: Module Foundation, Configuration & Security
-A payroll admin can install the module, load and maintain all statutory rates and tables, build reusable wage-component sets, assign them to employees, capture employee and contract tax data, and operate under least-privilege roles — everything needed before a payslip is computed. Stands up the greenfield module skeleton, the three-tier wage-component model, the dated statutory data stores (with CSV import and 2026 seed data), the per-year `hr.wage.component.ytd` model (empty), the scoped theme, and the Dutch translation.
+A payroll admin can install the module, load and maintain all statutory rates and tables, build reusable wage-component sets, assign them to employees, capture employee and contract tax data, and operate under least-privilege roles — everything needed before a payslip is computed. Stands up the greenfield module skeleton, the three-tier wage-component model, the dated statutory data stores (with CSV import and 2026 seed data), the per-year `hr.wage.component.ytd` model (empty), and the Dutch translation.
 **FRs covered:** FR015, FR016, FR017, FR019, FR026, FR027, FR029, FR031
-**ARs / UX-DRs:** AR001, AR014, AR015, AR016, AR022, AR023, UX-DR001, UX-DR002, UX-DR003
+**ARs / UX-DRs:** AR001, AR014, AR015, AR016, AR022, AR023 (UX-DR001–UX-DR003 superseded 2026-10-05)
 
 ### Epic 2: Statutory Payroll Calculation Engine
 A correct monthly payslip computes for any representative employee — standard, BVZ-exempt, above-ceiling, and with special remuneration — matching the official 2026 Belastingdienst/SVB publications within XCG 0.02. Implements the ordered salary-rule chain and all statutory components: gross pay, overtime, the SVB premiums (BVZ, AOV/AWW, AVBZ, ZV/OV), loonbelasting with tax credits, bijzondere beloningen, Lei di Bion exempt overtime, net pay, employer cost, and the enable/disable gate. Computes a single payslip independently of the batch lifecycle.
@@ -225,15 +225,17 @@ So that the Curaçao payroll framework is available without errors.
 
 ### Story 1.2: Scoped theme and Dutch i18n scaffolding
 
+*Theme part superseded 2026-10-05 (PO decision): the theme was removed after implementation; the module uses Odoo 19's default look. Only the Dutch i18n scaffolding remains in force.*
+
 As a payroll admin,
 I want the module's own screens styled with the `cw_theme_prl10n` theme and a Dutch interface,
 So that the module looks consistent and reads in Dutch without altering Odoo's standard pages.
 
 **Acceptance Criteria:**
 
-- **Given** the manifest `assets` entry, **When** the backend loads, **Then** `static/src/scss/cw_theme_prl10n.scss` is bundled into `web.assets_backend` (not the data list). (UX-DR001, AR014)
-- **Given** any theme rule, **Then** it is nested under the `.cw_theme_prl10n` wrapper and applied only to the module's own model screens; extended Odoo views (Employee, Contract, Salary Rule) render unchanged. (UX-DR002)
-- **Given** light and dark mode, **Then** the pastel palette is defined as CSS variables under `:root` — light values in `cw_theme_prl10n.scss`, dark values in `cw_theme_prl10n.dark.scss` registered in `web.assets_web_dark` (decided 2026-10-04, superseding `.o_dark_mode`). (UX-DR003)
+- *(Superseded 2026-10-05.)* **Given** the manifest `assets` entry, **When** the backend loads, **Then** `static/src/scss/cw_theme_prl10n.scss` is bundled into `web.assets_backend` (not the data list). (UX-DR001, AR014)
+- *(Superseded 2026-10-05.)* **Given** any theme rule, **Then** it is nested under the `.cw_theme_prl10n` wrapper and applied only to the module's own model screens; extended Odoo views (Employee, Contract, Salary Rule) render unchanged. (UX-DR002)
+- *(Superseded 2026-10-05.)* **Given** light and dark mode, **Then** the pastel palette is defined as CSS variables under `:root` — light values in `cw_theme_prl10n.scss`, dark values in `cw_theme_prl10n.dark.scss` registered in `web.assets_web_dark` (decided 2026-10-04, superseding `.o_dark_mode`). (UX-DR003)
 - **Given** `i18n/nl.po`, **Then** the module's UI strings have Dutch translations and statutory terms keep their official form (e.g. `basiskorting`, not `basisaftrek`). (AR016)
 
 ### Story 1.3: Security roles and own-payslip record rule
@@ -303,7 +305,7 @@ So that I can define reusable component templates and per-employee wage lines.
 - **Given** the Tier 1 layer, **Then** `hr.salary.rule` carries a `singleton` boolean (default `True`) controlling whether a wage component may be applied more than once to the same employee. (FR015)
 - **Given** a Tier 3 wage line, **Then** it carries `enabled` and `active` flags and a `salary_rule_id` link. (AR007, AR008)
 - **Given** the never-gate base rules, **Then** the model design supports them always running regardless of `enabled`. (AR007)
-- **Given** the module's own views, **Then** they carry the `.cw_theme_prl10n` wrapper. (UX-DR002)
+- **Given** the module's own views, **Then** they use Odoo 19's default look, with no custom wrapper class or stylesheet (decided 2026-10-05, superseding the `.cw_theme_prl10n` wrapper). (UX-DR002)
 
 ### Story 1.8: Apply wizard for wage-component sets
 
@@ -328,7 +330,7 @@ So that per-employee statutory inputs and the contract period are captured.
 - **Given** `hr.employee`, **Then** the tax-credit fields (alleenverdieners-, kinder-, ouderentoeslag) and the beschikking input exist. (FR019)
 - **Given** `hr.version` (the Odoo 19 successor of `hr.contract`), **Then** an OV% (gevarenklasse) field exists as an interim Float. (FR019)
 - **Given** `hr.version`, **Then** a required contract start date and an optional end date exist (`contract_date_start` / `contract_date_end`); permanent contracts with no end date are allowed. (FR029)
-- **Given** these are extended Odoo views, **Then** the `.cw_theme_prl10n` wrapper is NOT applied. (UX-DR002)
+- **Given** these are extended Odoo views, **Then** they keep Odoo 19's default look, with no custom styling. (UX-DR002)
 
 ### Story 1.10: Year-to-date totals model
 
@@ -341,7 +343,7 @@ So that cumulative premiums can be read and the close action can write totals la
 - **Given** the model, **Then** `hr.wage.component.ytd` exists keyed per employee, component, and year, with `ytd_amount`, `last_updated`, and `last_payslip_id`. (FR018)
 - **Given** company scoping, **Then** the YTD model is company-scoped via `company_id`. (AR022)
 - **Given** v1.0R, **Then** no writes occur here yet — writes happen only at run close (Epic 3) and reads happen in the calculation engine (Epic 2). (AR010)
-- **Given** the module's own view, **Then** it carries the `.cw_theme_prl10n` wrapper. (UX-DR002)
+- **Given** the module's own view, **Then** it uses Odoo 19's default look, with no custom wrapper class or stylesheet (decided 2026-10-05, superseding the `.cw_theme_prl10n` wrapper). (UX-DR002)
 
 ## Epic 2: Statutory Payroll Calculation Engine
 
@@ -729,7 +731,6 @@ So that the final settlement complies with the Vakantieregeling 1949.
 - UX-DR — UX Design Requirement.
 - OQ — Open Question.
 - UI / UX — User Interface / User Experience.
-- SCSS / CSS — stylesheet languages (Sassy CSS / Cascading Style Sheets).
 - PDF / CSV — document / comma-separated-values file formats.
 - Tier 1/2/3 — the three layers of the wage-component model (global rules / template sets / employee wage lines).
 - v1.0R — the first production release (manifest version 19.0.1.0.0).
@@ -776,5 +777,4 @@ So that the final settlement complies with the Vakantieregeling 1949.
 - `CWMONTHLY` / `CWSTAFF` — the monthly structure type / standard-staff salary structure.
 - Manifest keys — `depends`, `version`, `country`, `license`, `application`, `auto_install`, `assets`, `data`.
 - `web.assets_backend` — Odoo backend asset bundle.
-- `.cw_theme_prl10n` — theme wrapper CSS class; `:root` — token scope (light values in `cw_theme_prl10n.scss`, dark values in `cw_theme_prl10n.dark.scss`); `web.assets_web_dark` — Odoo 19's dark-mode stylesheet bundle; `.cw-portal` — portal scope (deferred).
-- `static/src/scss/cw_theme_prl10n.scss` — the theme stylesheet; `i18n/nl.po` — the Dutch translation file.
+- `i18n/nl.po` — the Dutch translation file.
