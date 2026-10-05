@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-03
+# last_updated: 2026-10-04
 # project: l10n_cw_hr_payrol
 # project_key: NOKEY
 # tracking_system: file-system
@@ -47,7 +47,7 @@
 #   pull it into the v1.0R sprint before Epics 1-4 are done.
 
 generated: 2026-07-07
-last_updated: 2026-10-03
+last_updated: 2026-10-04
 project: l10n_cw_hr_payrol
 project_key: NOKEY
 tracking_system: file-system
@@ -57,7 +57,7 @@ development_status:
   # ----- Epic 1: Module Foundation, Configuration & Security (v1.0R) -----
   epic-1: in-progress
   1-1-greenfield-module-skeleton-and-manifest: in-progress
-  1-2-scoped-theme-and-dutch-i18n-scaffolding: ready-for-dev
+  1-2-scoped-theme-and-dutch-i18n-scaffolding: in-progress
   1-3-security-roles-and-own-payslip-record-rule: ready-for-dev
   1-4-dated-statutory-data-models-and-lookup-methods: ready-for-dev
   1-5-seed-2026-statutory-data: backlog
