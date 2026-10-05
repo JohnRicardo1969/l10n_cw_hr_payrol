@@ -4,7 +4,7 @@ baseline_commit: c136873ab959b86f7ee62838b06009e414c4bc09
 
 # Story 1.1: Greenfield module skeleton and manifest
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -35,13 +35,13 @@ so that the Curaçao payroll framework is available without errors.
   - [x] `data` list empty; no `assets` entry yet (guardrail honored).
 - [x] **Task 3 — Confirm three-layer boundary mapping** (AC: 3)
   - [x] Directory-to-layer mapping (AD-11) respected; boundary documented in `__manifest__.py` comments and this story's Dev Notes. No cross-layer imports exist yet.
-- [ ] **Task 4 — Verify clean install and the no-hardcode principle** (AC: 1, 4)
-  - [ ] **PO verification (open):** live install on a clean Odoo 19 Enterprise DB — delegated to PO (2026-07-07: "I will take care of that"); PO confirms the Apps entry shows version `19.0.0.1.0`, license `OPL-1`, country `cw`, not an Application. *(Run with the post-review manifest — 5 depends, no `hr_contract`.)*
+- [x] **Task 4 — Verify clean install and the no-hardcode principle** (AC: 1, 4)
+  - [x] **PO verification (done 2026-10-05):** live install on Odoo 19 Enterprise (Coolify, `odoo:19.0` image) succeeded without errors; Apps entry confirmed `19.0.0.1.0`, `OPL-1`, not an Application. Original item: live install on a clean Odoo 19 Enterprise DB — delegated to PO (2026-07-07: "I will take care of that"); PO confirms the Apps entry shows version `19.0.0.1.0`, license `OPL-1`, country `cw`, not an Application. *(Run with the post-review manifest — 5 depends, no `hr_contract`.)*
   - [x] Dev-side: confirmed no Python statutory literals (grep of `*.py` — skeleton has none). *(AC4 met)*
   - [x] Dev-side: manifest validity asserted statically via `ast.literal_eval` (all AC1/AC2 fields — see Debug Log; re-asserted after the category and D1 changes).
-- [ ] **Task 5 — Verification: live install smoke-test** (AC: 1)
+- [x] **Task 5 — Verification: live install smoke-test** (AC: 1)
   - [x] Dev-side: smoke-test command documented; not executable in this sandbox (no Odoo core/Postgres).
-  - [ ] **PO verification (open):** run `odoo-bin -i l10n_cw_hr_payroll -d <db> --test-enable --stop-after-init` in own Odoo 19 Enterprise env and report the result.
+  - [x] **PO verification (done 2026-10-05):** `odoo -d caribware_dev_19_01 -u l10n_cw_hr_payroll --test-enable --stop-after-init` in the Coolify container: module loaded in 0.93s, registry loaded, `0 failed, 0 error(s) of 0 tests`. Original item: run `odoo-bin -i l10n_cw_hr_payroll -d <db> --test-enable --stop-after-init` in own Odoo 19 Enterprise env and report the result.
 
 ### Review Findings
 
@@ -196,3 +196,5 @@ Note (P4): the Tech Design's `author` placeholder `[COMPANY]` was resolved to `C
 - 2026-07-07: Code review (3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor) — 1 decision, 9 patches, 3 defers, 8 dismissed. Review D1 resolved and applied: `hr_contract` dropped from `depends` (module removed in Odoo 19; contracts absorbed into core `hr` as `hr.version`; salary-rule localdict exposes `version`, not `contract`). Spec chain updated together: manifest, CLAUDE.md, PRD, epics EN+NL (AR014, Story 1.1 AC2, Story 1.9), this story. Manifest re-asserted PASS with 5 depends.
 - 2026-07-08: D1 ripple completed into the Architecture Spine + `.memlog` (context `version`, layer table `hr_version.py`, AD-15 example, AD-21 `version.wage × 12`, depends table, seed line); spec-sync discipline made mandatory (CLAUDE.md §Spec-sync discipline + memory).
 - 2026-07-08: All 9 review patches applied — P1 Tasks 4/5 restructured into dev-side [x] / PO-side [ ] (checkbox honesty); P2 File List completed; P3 baseline-range note; P4 author + evidence-count notes; P5 AD-24 supersedes ×12 annualisation (CLAUDE.md invariant, PRD intro, spine summary row); P6 cap moved to premium rules, bases uncapped (PRD Steps 2–7; `AOV_AWW_1PCT` needs uncapped base); P7 `TAX_INC` anchored to the AD-14 base (PRD + epics 2.6 EN/NL); P8 guarded dict access for `inputs`/`worked_days` + `PENSION_EMP` input-type creation added to Story 2.6 (PRD context table + epics EN/NL); P9 Step-5 F1 wording untangled + CLAUDE.md `countries` key note. Status → in-progress pending the two open PO verification items (live install).
+- 2026-10-05: PO verified the live install on Odoo 19 Enterprise (Coolify): installed without errors, Apps entry shows `19.0.0.1.0`, `OPL-1`, not an Application. Task 4 closed. Task 5 (`--test-enable` run) still open: inside the running container it failed with "Port 8069 is in use"; rerun with a separate `--http-port`.
+- 2026-10-05: PO ran `-u l10n_cw_hr_payroll --test-enable --stop-after-init` (with `--http-port=8099` beside the live server) on `caribware_dev_19_01`: clean load, 0 failed / 0 errors of 0 tests. The only warnings came from the unrelated `cw_prepaid_topup` module. Task 5 closed; status → done.

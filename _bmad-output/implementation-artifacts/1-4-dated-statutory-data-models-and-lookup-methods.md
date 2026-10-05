@@ -33,7 +33,7 @@ so that rates and tables are maintained as data and read reproducibly by effecti
   - [ ] Create `models/hr_loonbelasting_tabel.py`: header fields `name`, `period_type` (Selection; v1.0R: `maand`; keep `week`/`dag`/`halvedag`/`quincena`/`kwartaal` values in the selection for v1.1R), `year` (Integer), `valid_from`, `valid_to` (nullable), `active`, `above_ceiling_rate` (Float — 46.5 for 2026; a **header field**, never a code literal), `lijn_ids` One2many. Row model `hr.loonbelasting.tabel.lijn`: `tabel_id`, `wage_from` (Float), `loonbelasting` (Float); unique `(tabel_id, wage_from)`.
   - [ ] `@api.model lookup_loonbelasting(wage, period_type, date)`: select header per AC3 (active, `period_type` match, `year in (date.year, date.year - 1)`, `valid_from ≤ date`, `valid_to` null or `≥ date`, order `year desc, valid_from desc, id desc`, limit 1 — the prior-year header is the fallback until the new year's table is uploaded; decided 2026-10-04, AD-20); lookup key `wage_from = floor(wage / step) * step` (maand step = 5.00); above table ceiling: `ceiling_tax + (wage − ceiling_wage) × above_ceiling_rate/100`; return `round(x, 2)`. Missing header or row → `UserError` naming `period_type` + date (AD-18).
 - [ ] **Task 4 — Views, menu, access** (supports FR017 rate maintenance)
-  - [ ] List/form views for all three models + menu Salarisadministratie → Configuratie → Tarieven (Dutch labels). Apply the `.cw_theme_prl10n` wrapper class on these module-owned views (UX-DR002; the SCSS exists since Story 1.2).
+  - [ ] List/form views for all three models + menu Salarisadministratie → Configuratie → Tarieven (Dutch labels). Use Odoo 19's default look: no wrapper class or custom styling (AD-15, decided 2026-10-05, superseding the `.cw_theme_prl10n` wrapper).
   - [ ] Add `ir.model.access` rows (per 1.3 convention): Payroll Manager = CRUD; Payroll User = read; others = none.
   - [ ] Wire new files into `models/__init__.py` and the manifest `data` list.
 - [ ] **Task 5 — Tests (first `tests/` package)** (AC: 2, 3, 4)
@@ -70,7 +70,7 @@ This story creates the models fresh (no migration needed yet), but the conventio
 - Manifest data-list guardrail: add view/security XML entries only for files created in this story.
 - Odoo 19 D1: no `hr.contract`; salary-rule localdict exposes `version`. Not directly touched here but the model docstrings/comments must not reference `hr.contract`.
 - Security convention from 1.3: this story adds its own `ir.model.access` rows; groups exist as `group_l10n_cw_*`.
-- Theme convention from 1.2: module-owned views carry `.cw_theme_prl10n`; the wrapper is a CSS class on the view root (e.g. `<form class="cw_theme_prl10n">`).
+- Presentation: no theme. The `cw_theme_prl10n` theme from Story 1.2 was removed (decided 2026-10-05, AD-15); views use Odoo 19's default look, with no wrapper class.
 - Verification protocol: dev-side `TransactionCase` tests may not be runnable in the sandbox (no Odoo core — verified in 1.1); write them anyway, document the run command, delegate execution to PO if needed.
 
 ### Project Structure Notes

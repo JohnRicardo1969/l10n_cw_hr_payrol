@@ -4,7 +4,7 @@ baseline_commit: fbb8bf8513c3fbbfb25403d0093eaedd2754c6ed
 
 # Story 1.2: Scoped theme and Dutch i18n scaffolding
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Ultimate context engine analysis completed - comprehensive developer guide created (batch-created 2026-07-08 from epics EN v1.0D + ARCHITECTURE-SPINE + PRD v3.0D + Story 1.1 learnings). -->
@@ -27,7 +27,7 @@ so that the module looks consistent and reads in Dutch without altering Odoo's s
 
 - [x] **Task 1 — Create the scoped SCSS theme file** (AC: 2, 3)
   - [x] Create `l10n_cw_hr_payroll/static/src/scss/cw_theme_prl10n.scss` (replaces the `.gitkeep` placeholder in `static/src/scss/`).
-  - [x] Define the pastel palette tokens as CSS variables: light mode under `:root`, dark mode under `.o_dark_mode` (Odoo's dark-mode class). Copy the palette values (lavender/violet accent; mint/peach/sky/rose support tints) from the reference module — do NOT add any dependency on it.
+  - [x] Define the pastel palette tokens as CSS variables: light mode under `:root`, dark mode under `.o_dark_mode` (Odoo's dark-mode class). *(Superseded 2026-10-04: dark values live under `:root` in `cw_theme_prl10n.dark.scss`, registered in `web.assets_web_dark` — see AC3.)* Copy the palette values (lavender/violet accent; mint/peach/sky/rose support tints) from the reference module — do NOT add any dependency on it.
   - [x] Nest **every** style rule under the single wrapper class `.cw_theme_prl10n`. Zero rules outside the wrapper.
 - [x] **Task 2 — Register the asset bundle in the manifest** (AC: 1)
   - [x] Add to `__manifest__.py`: `'assets': {'web.assets_backend': ['l10n_cw_hr_payroll/static/src/scss/cw_theme_prl10n.scss']}`.
@@ -35,10 +35,23 @@ so that the module looks consistent and reads in Dutch without altering Odoo's s
 - [x] **Task 3 — Dutch i18n scaffolding** (AC: 4)
   - [x] Create `l10n_cw_hr_payroll/i18n/nl.po` with a valid PO header (module has almost no translatable strings yet — this establishes the file and the workflow; later stories extend it as views/models add strings).
   - [x] Document the statutory-term rule in a comment block in the PO file: statutory terms keep their official form (`basiskorting`, `verwervingskosten`, `loonbelasting`, `bijzondere beloningen`, `beschikking` — never "translated away").
-- [ ] **Task 4 — Verify** (AC: 1, 2)
+- [x] **Task 4 — Verify** (AC: 1, 2)
   - [x] Dev-side: SCSS compiles (no syntax errors); manifest still parses via `ast.literal_eval`; every rule verified under `.cw_theme_prl10n` (grep for top-level selectors).
-  - [ ] Install smoke test (`-u l10n_cw_hr_payroll`) — if no Odoo runtime is available in the sandbox, document the command and delegate the live run to the PO (same protocol as Story 1.1).
-  - [ ] Verify a standard Odoo page (e.g. Employees form) renders without the wrapper class present anywhere in its DOM.
+  - [x] Install smoke test (`-u l10n_cw_hr_payroll`) *(PO-verified 2026-10-05 on `caribware_dev_19_01`: clean upgrade, 0 test failures/errors.)* — if no Odoo runtime is available in the sandbox, document the command and delegate the live run to the PO (same protocol as Story 1.1).
+  - [x] Verify a standard Odoo page (e.g. Employees form) renders without the wrapper class present anywhere in its DOM. *(PO-verified 2026-10-05 on Coolify Odoo 19 Enterprise.)*
+
+### Review Findings
+
+- [x] [Review][Decision] Rule set copied from `cw_theme` targets an older Odoo DOM — **Resolved 2026-10-05 (PO): trim now** — keep tokens, dark file, wrapper and simple colour/typography rules; remove structural rules that are wrong or unverified; later view stories add rules verified against the live DOM. Becomes the patch below. Original detail: Several rules probably never match on Odoo 19, or over-match: the wrapper card styling lands on the view controller root (it would wrap the control panel too); `.cw_theme_prl10n .o_list_view` is a descendant selector on the same element; `.o_cp_buttons`/`.o_form_buttons` are pre-17 names; the statusbar rule nests sibling containers and uses `.o_selected` instead of `o_arrow_button_current`; `.o_field_required` does not exist (Odoo uses `o_required_modifier`, and the label is a sibling); `.dropdown-menu` renders in a body-level overlay; `.o_form_sheet .o_field_widget` gets input styling with `!important` on every widget (x2many, tags, toggles, readonly, radio/file inputs); the `input:not(.o_input_dropdown)` exclusion is a no-op, which double-borders many2one fields. Not verifiable yet: no view applies the wrapper until later stories, and no Community `web` source exists locally. [l10n_cw_hr_payroll/static/src/scss/cw_theme_prl10n.scss:50-265]
+- [x] [Review][Patch] Trim the theme to tokens + safe colour/typography rules; drop the unverified structural rules (resolved decision) [l10n_cw_hr_payroll/static/src/scss/cw_theme_prl10n.scss:50-265]
+- [x] [Review][Patch] Dark mode: white text on the accent fails contrast (~2:1); `#ffffff` literal bypasses the tokens — add an on-accent text token (light `#ffffff`, dark a dark value), use it for `.btn-primary` and the statusbar current stage [l10n_cw_hr_payroll/static/src/scss/cw_theme_prl10n.scss:127,180; cw_theme_prl10n.dark.scss]
+- [x] [Review][Patch] AR014 (EN+NL) names only the light stylesheet in `web.assets_backend`; add the dark file in `web.assets_web_dark` [_bmad-output/planning-artifacts/Odoo Module Design Epics - EN - v1.0D.md:125, NL:129]
+- [x] [Review][Patch] Spine: file tree omits `cw_theme_prl10n.dark.scss`; AD-15 opening clause names one bundle only; dangling "(Reference only, not a" line break [_bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/ARCHITECTURE-SPINE.md:274,711]
+- [x] [Review][Patch] Epics glossary (EN+NL) file entry lists only the light stylesheet [_bmad-output/planning-artifacts/Odoo Module Design Epics - EN - v1.0D.md:780, NL:784]
+- [x] [Review][Patch] Story record stale: Task 1 subtask still prescribes `.o_dark_mode` without a supersession note; Completion Notes say Task 4 stays unchecked/in-progress; File List says sprint-status "1-2 → in-progress"; Project Structure Notes omit the dark file [this story file:30,65,108,121]
+- [x] [Review][Defer] Muted text `#9a93b5` on white is ~2.9:1, below WCAG AA [l10n_cw_hr_payroll/static/src/scss/cw_theme_prl10n.scss:36] — deferred, pre-existing (palette inherited from the `cw_theme` reference)
+- [x] [Review][Defer] Theme not registered in a report asset bundle although UX-DR002 scopes it to reports too [l10n_cw_hr_payroll/__manifest__.py] — deferred, pre-existing (reports arrive in Epic 4)
+- [x] [Review][Defer] Dutch source strings conflict with Odoo's English-source i18n model (other languages fall back to Dutch; `nl.po` mostly redundant) [l10n_cw_hr_payroll/i18n/nl.po] — deferred, pre-existing (project convention in CLAUDE.md)
 
 ## Dev Notes
 
@@ -64,7 +77,7 @@ so that the module looks consistent and reads in Dutch without altering Odoo's s
 
 ### Project Structure Notes
 
-- Files touched: `static/src/scss/cw_theme_prl10n.scss` (new), `i18n/nl.po` (new), `__manifest__.py` (assets key added). Remove the two `.gitkeep` placeholders these replace.
+- Files touched: `static/src/scss/cw_theme_prl10n.scss` (new), `static/src/scss/cw_theme_prl10n.dark.scss` (new, added 2026-10-04 for dark mode), `i18n/nl.po` (new), `__manifest__.py` (assets key added). Remove the two `.gitkeep` placeholders these replace.
 - Matches Tech Design §13 tree (`i18n/nl.po`) + Spine AD-15 (`static/src/scss/cw_theme_prl10n.scss`; the SCSS/assets entry is a Spine addition to §13 — intended, not a conflict).
 
 ### Testing standards
@@ -94,18 +107,18 @@ Claude Opus 5.5 (claude-opus-5-5)
 
 ### Completion Notes List
 
-- Theme: `cw_theme_prl10n.scss` (in `web.assets_backend`) holds the light tokens under `:root` and every style rule under `.cw_theme_prl10n`. The palette and rules are copied from the Caribware `cw_theme` reference, with no dependency on it. The header comment forbids applying the wrapper to inherited Odoo views or moving rules outside it.
+- Theme: `cw_theme_prl10n.scss` (in `web.assets_backend`) holds the light tokens under `:root` and every style rule under `.cw_theme_prl10n`. The palette is copied from the Caribware `cw_theme` reference, with no dependency on it. *(2026-10-05 review: the copied structural rules were removed; the file keeps colour/typography rules only — see Review Findings.)* The header comment forbids applying the wrapper to inherited Odoo views or moving rules outside it.
 - Dark mode — **deviation from AC3 as written, PO-approved 2026-10-04:** dark token values live in `cw_theme_prl10n.dark.scss` under `:root`, registered in `web.assets_web_dark`, not under `.o_dark_mode` (that class does not exist in Odoo 19). Spec chain updated in the same session: spine AD-15 + memlog, epics EN/NL (UX-DR001, UX-DR003, Story 1.2 AC, glossary). This story file's AC text is left as written (the dev workflow may not edit ACs); the epics carry the corrected AC.
 - Tokens are namespaced `--cw-prl10n-*` instead of the reference's `--cw-*`. Both themes write their tokens on `:root`, so identical names would let one module overwrite the other's colours when both are installed.
 - i18n: `i18n/nl.po` is a valid header-only PO file. The module has no translatable strings yet (no views/models), so AC4's "UI strings have Dutch translations" holds vacuously for now; the file documents the statutory-term rule and the convention that later stories extend it.
 - Note outside this repo: the `cw_theme` reference module has the same `.o_dark_mode` defect, so its dark palette never activates on Odoo 19.
-- **Open — PO verification (live, same protocol as Story 1.1).** The install command alone proves little here: `--stop-after-init` never compiles asset bundles, because Odoo compiles SCSS with libsass only when a browser first requests a bundle. Steps:
+- **PO verification — done 2026-10-05** on Coolify Odoo 19 Enterprise (`caribware_dev_19_01`): light mode returned `#ffffff`, dark mode `#1d1a26`. Original instructions follow. The install command alone proves little here: `--stop-after-init` never compiles asset bundles, because Odoo compiles SCSS with libsass only when a browser first requests a bundle. Steps:
   1. `odoo-bin -d cw_test --addons-path=<community>/addons,/home/nroosje/dev/odoo-sh/enterprise-19.0,/home/nroosje/dev/odoo-poc/l10n_cw_hr_payrol -u l10n_cw_hr_payroll --stop-after-init`, then start the server normally.
   2. Open the backend in light mode. In the browser console run `getComputedStyle(document.documentElement).getPropertyValue('--cw-prl10n-card-bg')` → expect `#ffffff`.
   3. Switch to dark mode and run it again → expect `#1d1a26`. This proves the dark file loads after the light tokens.
   4. In both modes, check the browser console and the server log for asset/SCSS errors, and confirm the Employees form looks unchanged (no wrapper class in its DOM).
 
-  Task 4's install and standard-page subtasks stay unchecked until this is reported, so the story stays `in-progress`. Bundle order: `web_enterprise` (which defines `web.assets_web_dark`) is a transitive dependency through `hr_payroll`, so it loads before this module.
+  Bundle order: `web_enterprise` (which defines `web.assets_web_dark`) is a transitive dependency through `hr_payroll`, so it loads before this module.
 
 ### File List
 
@@ -119,9 +132,15 @@ Claude Opus 5.5 (claude-opus-5-5)
 - `_bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/.memlog.md` (decision entry)
 - `_bmad-output/planning-artifacts/Odoo Module Design Epics - EN - v1.0D.md` (UX-DR001, UX-DR003, Story 1.2 AC, glossary)
 - `_bmad-output/planning-artifacts/Odoo Module Design Epics - NL - v1.0D.md` (same, NL)
-- `_bmad-output/implementation-artifacts/sprint-status.yaml` (1-2 → in-progress)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (1-2 → in-progress → review → done)
+- `_bmad-output/implementation-artifacts/deferred-work.md` (3 review defers)
 - `_bmad-output/implementation-artifacts/1-2-scoped-theme-and-dutch-i18n-scaffolding.md` (this file)
 
 ## Change Log
 
 - 2026-10-04: Implemented Tasks 1–3 and the dev-side part of Task 4. Dark mode moved from the `.o_dark_mode` class (AC3 as written) to a `cw_theme_prl10n.dark.scss` file in `web.assets_web_dark`, because Odoo 19 has no dark-mode class (PO decision; spine AD-15 and epics EN/NL updated). Added a dated supersession note under AC3 (PO-approved). The live install and render checks are open for the PO, so the status stays in-progress.
+- 2026-10-05: PO installed the module on Odoo 19 Enterprise (Coolify) without errors and confirmed the Employees form carries no `cw_theme_prl10n` class. Still open: the light/dark `--cw-prl10n-card-bg` console checks (Completion Notes steps 2–4) and the `-u` smoke test.
+- 2026-10-05: PO's `-u` smoke test on `caribware_dev_19_01` passed (clean upgrade, 0 failures/errors). Only the light/dark token console checks remain.
+- 2026-10-05: PO verified the token checks: `--cw-prl10n-card-bg` is `#ffffff` in light mode and `#1d1a26` in dark mode, so the dark file loads after the light tokens. Task 4 closed; all tasks complete. Status → review (story not yet code-reviewed).
+- 2026-10-05: Code review (Blind Hunter, Edge Case Hunter, Acceptance Auditor): 1 decision, 5 patches, 3 defers, 5 dismissed. Decision resolved by PO: trim the theme to colour/typography rules (copied cw_theme structural rules targeted an older Odoo DOM). All 6 patches applied: theme trimmed, `--cw-prl10n-on-accent` token added (dark-mode button contrast), buttons recoloured through Odoo 19's `--btn-*` variables without `!important`; spine AD-15 + file tree + memlog, epics EN+NL AR014 and glossary updated for the dark file; this story's stale notes fixed. Both SCSS files compile (dart-sass). Status → done.
+- 2026-10-05: PO decision after this story closed: the theme was removed entirely; the module uses Odoo 19's default look. Both SCSS files and the manifest `assets` key were deleted, and the theme requirements were superseded across the spine (AD-15 rewritten), epics EN+NL (UX-DR001–004, AR014, theme ACs) and Story 1.4. The Dutch i18n scaffolding (`i18n/nl.po`) stays. This record is kept as history.
