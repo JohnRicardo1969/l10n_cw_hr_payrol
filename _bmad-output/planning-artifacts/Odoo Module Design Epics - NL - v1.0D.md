@@ -139,9 +139,9 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 De module gebruikt de standaardschermen van Odoo (lijst-/formulier-/menuweergaven), met een custom gescopeerd stylesheet-thema voor de eigen schermen van de module. Referentie (alleen-lezen, geen afhankelijkheid): `/home/nroosje/dev/odoo-sh/odoo-cbw-ent/service-business-suite/cw_theme`.
 
-- UX-DR001: Lever een gescopeerd stylesheet-thema genaamd `cw_theme_prl10n`, gebundeld **binnen** de module als stylesheetbestand (`static/src/scss/cw_theme_prl10n.scss`) en geladen via de manifest-assets-vermelding (`assets`) in de backend-bundel (`web.assets_backend`) — niet de data-lijst. Geen nieuwe module en geen nieuwe afhankelijkheid.
+- UX-DR001: Lever een gescopeerd stylesheet-thema genaamd `cw_theme_prl10n`, gebundeld **binnen** de module als stylesheetbestand (`static/src/scss/cw_theme_prl10n.scss`) en geladen via de manifest-assets-vermelding (`assets`) in de backend-bundel (`web.assets_backend`) — niet de data-lijst; het bestand met de kleuren voor de donkere modus (`static/src/scss/cw_theme_prl10n.dark.scss`) gaat in de donkere bundel (`web.assets_web_dark`). Geen nieuwe module en geen nieuwe afhankelijkheid.
 - UX-DR002: Plaats **elke** themaregel onder één wrapper-CSS-klasse (`.cw_theme_prl10n`), alleen toegepast op de eigen modelschermen van de module (de Belastingschijf-, Looncomponentset- en Medewerker-loonregel-weergaven, en CW-eigen loonstrook-/runweergaven en -rapporten). Voeg de wrapper **nooit** toe aan uitgebreide Odoo-weergaven (Medewerker, Contract, Salarisregel) — Odoo's eigen pagina's moeten er ongewijzigd uitzien.
-- UX-DR003: Definieer de pastelkleuren als CSS-variabelen voor lichte modus (de paginaroot, `:root`) en donkere modus (Odoo's donkere-modusklasse, `.o_dark_mode`), met hergebruik van het palet van cw_theme (lavendel/violet accent; mint/perzik/lucht/roze ondersteunende tinten). De kleuren worden naar deze module gekopieerd; cw_theme blijft alleen een referentie, geen afhankelijkheid.
+- UX-DR003: Definieer de pastelkleuren als CSS-variabelen voor lichte modus (de paginaroot, `:root`) en donkere modus (`:root` in het donkere-modusbestand `cw_theme_prl10n.dark.scss`, dat Odoo 19 alleen via zijn donkere bundel `web.assets_web_dark` laadt — Odoo 19 heeft geen donkere-modus-CSS-klasse; besloten 2026-10-04, ter vervanging van `.o_dark_mode`), met hergebruik van het palet van cw_theme (lavendel/violet accent; mint/perzik/lucht/roze ondersteunende tinten). De kleuren worden naar deze module gekopieerd; cw_theme blijft alleen een referentie, geen afhankelijkheid.
 - UX-DR004 (uitgesteld): Portalpaginastyling (de portal-tegenhanger in cw_theme, `.cw-portal`) valt buiten scope voor v1.0R en wordt heroverwogen bij distributie van loonstroken (OQ-01); alleen backend-styling wordt in v1.0R geleverd.
 
 ### FR-dekkingskaart
@@ -237,7 +237,7 @@ zodat de module consistent oogt en in het Nederlands leest zonder Odoo's standaa
 
 - **Gegeven** de manifest-`assets`-vermelding, **wanneer** de backend laadt, **dan** wordt `static/src/scss/cw_theme_prl10n.scss` gebundeld in `web.assets_backend` (niet de data-lijst). (UX-DR001, AR014)
 - **Gegeven** elke themaregel, **dan** is deze genest onder de `.cw_theme_prl10n`-wrapper en alleen toegepast op de eigen modelschermen van de module; uitgebreide Odoo-weergaven (Medewerker, Contract, Salarisregel) blijven ongewijzigd. (UX-DR002)
-- **Gegeven** lichte en donkere modus, **dan** is het pastelpalet gedefinieerd als CSS-variabelen onder `:root` en `.o_dark_mode`. (UX-DR003)
+- **Gegeven** lichte en donkere modus, **dan** is het pastelpalet gedefinieerd als CSS-variabelen onder `:root` — lichte waarden in `cw_theme_prl10n.scss`, donkere waarden in `cw_theme_prl10n.dark.scss`, geregistreerd in `web.assets_web_dark` (besloten 2026-10-04, ter vervanging van `.o_dark_mode`). (UX-DR003)
 - **Gegeven** `i18n/nl.po`, **dan** hebben de UI-teksten van de module Nederlandse vertalingen en behouden wettelijke termen hun officiële vorm (bijv. `basiskorting`, niet `basisaftrek`). (AR016)
 
 ### Story 1.3: Beveiligingsrollen en eigen-loonstrook record rule
@@ -780,5 +780,5 @@ zodat de eindafrekening voldoet aan de Vakantieregeling 1949.
 - `CWMONTHLY` / `CWSTAFF` — het maandstructuurtype / de standaard-staf-salarisstructuur.
 - Manifestsleutels — `depends`, `version`, `country`, `license`, `application`, `auto_install`, `assets`, `data`.
 - `web.assets_backend` — Odoo backend-assetbundel.
-- `.cw_theme_prl10n` — thema-wrapper-CSS-klasse; `:root` / `.o_dark_mode` — token-scopes voor lichte / donkere modus; `.cw-portal` — portal-scope (uitgesteld).
+- `.cw_theme_prl10n` — thema-wrapper-CSS-klasse; `:root` — token-scope (lichte waarden in `cw_theme_prl10n.scss`, donkere waarden in `cw_theme_prl10n.dark.scss`); `web.assets_web_dark` — de stylesheetbundel van Odoo 19 voor de donkere modus; `.cw-portal` — portal-scope (uitgesteld).
 - `static/src/scss/cw_theme_prl10n.scss` — het themastylesheet; `i18n/nl.po` — het Nederlandse vertaalbestand.

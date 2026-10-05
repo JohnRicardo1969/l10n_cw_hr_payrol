@@ -135,9 +135,9 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 
 The module uses Odoo's standard screens (list/form/menu views), with a custom scoped stylesheet theme for the module's own screens. Reference (read-only, not a dependency): `/home/nroosje/dev/odoo-sh/odoo-cbw-ent/service-business-suite/cw_theme`.
 
-- UX-DR001: Provide a scoped stylesheet theme named `cw_theme_prl10n`, bundled **inside** the module as a stylesheet file (`static/src/scss/cw_theme_prl10n.scss`) and loaded through the manifest assets entry (`assets`) into the backend bundle (`web.assets_backend`) — not the data list. No new module and no new dependency.
+- UX-DR001: Provide a scoped stylesheet theme named `cw_theme_prl10n`, bundled **inside** the module as a stylesheet file (`static/src/scss/cw_theme_prl10n.scss`) and loaded through the manifest assets entry (`assets`) into the backend bundle (`web.assets_backend`) — not the data list; its dark-mode token file (`static/src/scss/cw_theme_prl10n.dark.scss`) goes into the dark bundle (`web.assets_web_dark`). No new module and no new dependency.
 - UX-DR002: Put **every** theme rule under one wrapper CSS class (`.cw_theme_prl10n`), applied **only** to the module's own model screens (the Tax Bracket, Wage Component Set, and Employee Wage Line views, and CW-owned payslip/run views and reports). **Never** add the wrapper to extended Odoo views (Employee, Contract, Salary Rule) — Odoo's own pages must look unchanged.
-- UX-DR003: Define the pastel colours as CSS variables for light mode (the page root, `:root`) and dark mode (Odoo's dark-mode class, `.o_dark_mode`), reusing cw_theme's palette (lavender/violet accent; mint/peach/sky/rose support tints). The colours are copied into this module; cw_theme stays a reference only, not a dependency.
+- UX-DR003: Define the pastel colours as CSS variables for light mode (the page root, `:root`) and dark mode (`:root` in the dark-mode file `cw_theme_prl10n.dark.scss`, which Odoo 19 loads only through its dark bundle `web.assets_web_dark` — Odoo 19 has no dark-mode CSS class; decided 2026-10-04, superseding `.o_dark_mode`), reusing cw_theme's palette (lavender/violet accent; mint/peach/sky/rose support tints). The colours are copied into this module; cw_theme stays a reference only, not a dependency.
 - UX-DR004 (deferred): Portal-page styling (the portal counterpart in cw_theme, `.cw-portal`) is out of scope for v1.0R and revisited with payslip distribution (OQ-01); only backend styling ships in v1.0R.
 
 ### FR Coverage Map
@@ -233,7 +233,7 @@ So that the module looks consistent and reads in Dutch without altering Odoo's s
 
 - **Given** the manifest `assets` entry, **When** the backend loads, **Then** `static/src/scss/cw_theme_prl10n.scss` is bundled into `web.assets_backend` (not the data list). (UX-DR001, AR014)
 - **Given** any theme rule, **Then** it is nested under the `.cw_theme_prl10n` wrapper and applied only to the module's own model screens; extended Odoo views (Employee, Contract, Salary Rule) render unchanged. (UX-DR002)
-- **Given** light and dark mode, **Then** the pastel palette is defined as CSS variables under `:root` and `.o_dark_mode`. (UX-DR003)
+- **Given** light and dark mode, **Then** the pastel palette is defined as CSS variables under `:root` — light values in `cw_theme_prl10n.scss`, dark values in `cw_theme_prl10n.dark.scss` registered in `web.assets_web_dark` (decided 2026-10-04, superseding `.o_dark_mode`). (UX-DR003)
 - **Given** `i18n/nl.po`, **Then** the module's UI strings have Dutch translations and statutory terms keep their official form (e.g. `basiskorting`, not `basisaftrek`). (AR016)
 
 ### Story 1.3: Security roles and own-payslip record rule
@@ -776,5 +776,5 @@ So that the final settlement complies with the Vakantieregeling 1949.
 - `CWMONTHLY` / `CWSTAFF` — the monthly structure type / standard-staff salary structure.
 - Manifest keys — `depends`, `version`, `country`, `license`, `application`, `auto_install`, `assets`, `data`.
 - `web.assets_backend` — Odoo backend asset bundle.
-- `.cw_theme_prl10n` — theme wrapper CSS class; `:root` / `.o_dark_mode` — light / dark mode token scopes; `.cw-portal` — portal scope (deferred).
+- `.cw_theme_prl10n` — theme wrapper CSS class; `:root` — token scope (light values in `cw_theme_prl10n.scss`, dark values in `cw_theme_prl10n.dark.scss`); `web.assets_web_dark` — Odoo 19's dark-mode stylesheet bundle; `.cw-portal` — portal scope (deferred).
 - `static/src/scss/cw_theme_prl10n.scss` — the theme stylesheet; `i18n/nl.po` — the Dutch translation file.
