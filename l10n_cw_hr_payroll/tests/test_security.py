@@ -11,7 +11,7 @@ PAYROLL_USER_GROUP = 'l10n_cw_hr_payroll.group_l10n_cw_payroll_user'
 PAYROLL_MANAGER_GROUP = 'l10n_cw_hr_payroll.group_l10n_cw_payroll_manager'
 
 
-@tagged('post_install', '-at_install')
+@tagged('post_install_l10n', 'post_install', '-at_install')
 class TestPayrollSecurity(TransactionCase):
     """Least-privilege roles and the own-payslip record rule (FR026, FR027)."""
 

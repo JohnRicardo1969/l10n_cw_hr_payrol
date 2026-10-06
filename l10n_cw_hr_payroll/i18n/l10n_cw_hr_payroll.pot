@@ -1,0 +1,66 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+#	* l10n_cw_hr_payroll
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 19.0+e-20260528\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-06 20:20+0000\n"
+"PO-Revision-Date: 2026-10-06 20:20+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: l10n_cw_hr_payroll
+#: model:res.groups,name:l10n_cw_hr_payroll.group_l10n_cw_accountant
+msgid "Accountant"
+msgstr ""
+
+#. module: l10n_cw_hr_payroll
+#: model:res.groups,comment:l10n_cw_hr_payroll.group_l10n_cw_payroll_user
+msgid ""
+"Berekent salarisruns, bewerkt looncomponenten van medewerkers en leest "
+"tarieven."
+msgstr ""
+
+#. module: l10n_cw_hr_payroll
+#: model:res.groups,name:l10n_cw_hr_payroll.group_l10n_cw_payroll_user
+msgid "Gebruiker"
+msgstr ""
+
+#. module: l10n_cw_hr_payroll
+#: model:res.groups,comment:l10n_cw_hr_payroll.group_l10n_cw_accountant
+msgid ""
+"Leest salarisruns, loonstroken en journaalboekingen; kan niets wijzigen."
+msgstr ""
+
+#. module: l10n_cw_hr_payroll
+#: model:res.groups,name:l10n_cw_hr_payroll.group_l10n_cw_payroll_manager
+msgid "Manager"
+msgstr ""
+
+#. module: l10n_cw_hr_payroll
+#: model:res.groups,name:l10n_cw_hr_payroll.group_l10n_cw_employee
+msgid "Medewerker"
+msgstr ""
+
+#. module: l10n_cw_hr_payroll
+#: model:res.groups.privilege,name:l10n_cw_hr_payroll.res_groups_privilege_l10n_cw_payroll
+msgid "Salarisadministratie Curaçao"
+msgstr ""
+
+#. module: l10n_cw_hr_payroll
+#: model:res.groups,comment:l10n_cw_hr_payroll.group_l10n_cw_payroll_manager
+msgid ""
+"Volledige toegang, inclusief tarieven, SVB-parameters, loonbelastingtabellen"
+" en heropenen van afgesloten runs."
+msgstr ""
+
+#. module: l10n_cw_hr_payroll
+#: model:res.groups,comment:l10n_cw_hr_payroll.group_l10n_cw_employee
+msgid "Ziet alleen de eigen definitieve loonstroken."
+msgstr ""

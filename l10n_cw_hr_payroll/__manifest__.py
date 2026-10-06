@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
 {
-    'name': 'Payroll — Curaçao',
+    'name': 'Curaçao - Payroll',
     'version': '19.0.0.1.0',
     # 'Human Resources/Payroll' matches all shipped Odoo payroll localizations
     # (l10n_*_hr_payroll) — required for a future official-localization track.
     'category': 'Human Resources/Payroll',
     'summary': 'Curaçao payroll localization: loonbelasting, SVB premiums, three-tier wage model',
     'description': """
-Payroll — Curaçao
+Curaçao - Payroll
 =================
 
 Statutory payroll for Curaçao (loonbelasting and SVB premiums) on the Odoo
