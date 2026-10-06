@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hr_payslip_cw_employee,hr.payslip.cw.employee,hr_payroll.model_hr_payslip,group_l10n_cw_employee,1,0,0,0
+access_hr_payslip_cw_accountant,hr.payslip.cw.accountant,hr_payroll.model_hr_payslip,group_l10n_cw_accountant,1,0,0,0
+access_hr_payslip_run_cw_accountant,hr.payslip.run.cw.accountant,hr_payroll.model_hr_payslip_run,group_l10n_cw_accountant,1,0,0,0

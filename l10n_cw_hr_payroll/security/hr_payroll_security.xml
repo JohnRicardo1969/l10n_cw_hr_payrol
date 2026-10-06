@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+    Role matrix (PRD "Users and Roles"; finer per-group rights are OQ-04, deferred):
+
+      Medewerker  (group_l10n_cw_employee)        read own final payslips only (rule below)
+      Gebruiker   (group_l10n_cw_payroll_user)    compute runs, edit wage lines, read rates
+      Manager     (group_l10n_cw_payroll_manager) full access, incl. rates and reopening runs
+      Accountant  (group_l10n_cw_accountant)      read runs, payslips and journal entries; no write
+
+    ir.model.access.csv cannot carry comments, so its conventions live here:
+    each story that creates a model adds that model's access rows in the same
+    change, following the matrix above. Never add a row for a model that does not
+    exist yet - the install fails on the unknown model. Any read row for Medewerker
+    needs an own-records rule like rule_payslip_employee_own, otherwise the group
+    sees every employee's records. Security regression tests live in
+    tests/test_security.py; extend them with each new model.
+    -->
+
+    <record id="res_groups_privilege_l10n_cw_payroll" model="res.groups.privilege">
+        <field name="name">Salarisadministratie Curaçao</field>
+        <field name="sequence">17</field>
+        <field name="category_id" ref="base.module_category_human_resources"/>
+    </record>
+
+    <!-- Implying base.group_user keeps the role off portal and share users, which must not read payslips this way. -->
+    <record id="group_l10n_cw_employee" model="res.groups">
+        <field name="name">Medewerker</field>
+        <field name="sequence">10</field>
+        <field name="privilege_id" ref="res_groups_privilege_l10n_cw_payroll"/>
+        <field name="implied_ids" eval="[Command.link(ref('base.group_user'))]"/>
+        <field name="comment">Ziet alleen de eigen definitieve loonstroken.</field>
+    </record>
+
+    <!-- account.group_account_readonly gives read access to the journal entries the runs post. -->
+    <record id="group_l10n_cw_accountant" model="res.groups">
+        <field name="name">Accountant</field>
+        <field name="sequence">15</field>
+        <field name="privilege_id" ref="res_groups_privilege_l10n_cw_payroll"/>
+        <field name="implied_ids" eval="[Command.link(ref('account.group_account_readonly'))]"/>
+        <field name="comment">Leest salarisruns, loonstroken en journaalboekingen; kan niets wijzigen.</field>
+    </record>
+
+    <!--
+    The core payroll ACLs (hr.payslip, hr.payslip.run, ...) are bound to the
+    hr_payroll groups, so the CW roles imply them instead of duplicating every
+    access row. Side effect: hr_payroll.group_hr_payroll_user implies
+    hr.group_hr_user, so a CW Gebruiker can also manage employee records.
+    -->
+    <record id="group_l10n_cw_payroll_user" model="res.groups">
+        <field name="name">Gebruiker</field>
+        <field name="sequence">20</field>
+        <field name="privilege_id" ref="res_groups_privilege_l10n_cw_payroll"/>
+        <field name="implied_ids" eval="[Command.link(ref('hr_payroll.group_hr_payroll_user'))]"/>
+        <field name="comment">Berekent salarisruns, bewerkt looncomponenten van medewerkers en leest tarieven.</field>
+    </record>
+
+    <!--
+    Most senior role: payslip distribution (AD-16) and Lei di Bion beschikking
+    approval reuse this group by XML id, so no further group is added (AR019).
+    -->
+    <record id="group_l10n_cw_payroll_manager" model="res.groups">
+        <field name="name">Manager</field>
+        <field name="sequence">30</field>
+        <field name="privilege_id" ref="res_groups_privilege_l10n_cw_payroll"/>
+        <field name="implied_ids" eval="[
+            Command.link(ref('group_l10n_cw_payroll_user')),
+            Command.link(ref('hr_payroll.group_hr_payroll_manager')),
+        ]"/>
+        <field name="comment">Volledige toegang, inclusief tarieven, SVB-parameters, loonbelastingtabellen en heropenen van afgesloten runs.</field>
+    </record>
+
+    <!--
+    Only validated or paid payslips: draft and cancelled slips carry provisional
+    amounts that must not reach employees before the run is final.
+    -->
+    <record id="rule_payslip_employee_own" model="ir.rule">
+        <field name="name">Employee: own final payslips only</field>
+        <field name="model_id" ref="hr_payroll.model_hr_payslip"/>
+        <field name="groups" eval="[Command.link(ref('group_l10n_cw_employee'))]"/>
+        <field name="domain_force">[('employee_id.user_id', '=', user.id), ('state', 'in', ('validated', 'paid'))]</field>
+    </record>
+
+    <!--
+    Odoo ORs the rules of all groups a user holds. Without this rule, an
+    Accountant who also holds Medewerker would be narrowed to their own payslips.
+    Gebruiker and Manager are covered by hr_payroll's own all-payslips rules.
+    -->
+    <record id="rule_payslip_accountant_all" model="ir.rule">
+        <field name="name">Accountant: all payslips</field>
+        <field name="model_id" ref="hr_payroll.model_hr_payslip"/>
+        <field name="groups" eval="[Command.link(ref('group_l10n_cw_accountant'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+</odoo>
