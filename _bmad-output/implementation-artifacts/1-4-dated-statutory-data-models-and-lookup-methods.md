@@ -36,7 +36,7 @@ so that rates and tables are maintained as data and read reproducibly by effecti
   - [ ] List/form views for all three models + menu Salarisadministratie → Configuratie → Tarieven (Dutch labels). Use Odoo 19's default look: no wrapper class or custom styling (AD-15, decided 2026-10-05, superseding the `.cw_theme_prl10n` wrapper).
   - [ ] Add `ir.model.access` rows (per 1.3 convention): Payroll Manager = CRUD; Payroll User = read; others = none.
   - [ ] Wire new files into `models/__init__.py` and the manifest `data` list.
-- [ ] **Task 5 — Tests (first `tests/` package)** (AC: 2, 3, 4)
+- [ ] **Task 5 — Tests (first `tests/` package)** (AC: 2, 3, 4) *(Updated 2026-10-05: the `tests/` package already exists since Story 1.3 — extend `tests/__init__.py` and keep its `test_security` import; do not recreate it.)*
   - [ ] Create `tests/__init__.py` + `tests/test_statutory_lookups.py` (`TransactionCase`): scalar lookup by date window; marginal-rate band edges (`income_from ≤ x < income_to`, top band `income_to=0`); lb-tabel version selection (two headers same year → latest `valid_from` wins; tie → highest `id`); lb-tabel prior-year fallback (January 2027 with only a still-open 2026 header → 2026 table used; once a 2027 header exists → 2027 wins; 2026 header closed via `valid_to` → `UserError`; only a 2025 header in 2027 → `UserError`); above-ceiling formula; `UserError` on missing record for all three lookups; no-prior-year-fallback for `get_params`.
 
 ## Dev Notes
