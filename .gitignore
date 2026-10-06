@@ -132,3 +132,6 @@ claude_swarm_supervisor.py
 
 # Documentation MS Word files
 **/*.docx
+
+# Playwright MCP browser output (snapshots, console logs, screenshots)
+.playwright-mcp/
