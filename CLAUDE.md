@@ -61,6 +61,8 @@ No blocking questions remain for v1.0R. The other open questions (OQ-01..OQ-10) 
 - Salary-rule `amount_python_compute` context: `employee`, `version` (the `hr.version` record — Odoo 19 replaces the v3.0D `contract` variable), `payslip`, `worked_days`, `inputs`, `categories`, `rules`, `env` — must assign `result`. Hidden intermediates carry `appears_on_payslip = False`.
 - UI strings and model menus are Dutch (e.g. Salarisadministratie → Configuratie → Tarieven); keep statutory terms in their official form (`basiskorting`, not `basisaftrek`).
 - Working-hours divisor is the fixed constant **173.33 hrs/month** (8h × 5d × 52wk ÷ 12).
+- Official-localization conformance (added 2026-10-06): before every commit, `tools/check_l10n_conformance.py` (git pre-commit hook, warnings only) compares the module with the conventions in `docs/reference/official-localization-checklist.md`. A new divergence is either fixed or recorded in `docs/reference/official-localization-divergences.md` in the same change; deciding an Open divergence is a PO decision and follows the spec-sync discipline.
+- Upgrade watch list (added 2026-10-06): every change that hooks into Odoo (an inherited model, an overridden method, a referenced XML id, a relied-on behaviour) adds an entry to `docs/reference/upgrade-watch-list.md` in the same change. Append new entries; never renumber existing ones, because other docs cite them as `§N.M`.
 
 ## Markdown output conventions
 

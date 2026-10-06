@@ -85,6 +85,30 @@ Lines that look alarming but are expected:
 
 If `test_user_without_cw_group_has_no_payslip_access` is the only failure, another installed module grants every internal user read access to payslips. That is a data leak to investigate, not a test to relax.
 
+# Conformance check before each commit
+
+`tools/check_l10n_conformance.py` compares the module with the conventions of the official Odoo payroll localizations ([checklist](../reference/official-localization-checklist.md)). It needs no Odoo: it only reads the module's files.
+
+It runs automatically before every `git commit` through the hook `tools/git-hooks/pre-commit`, after this one-time setup in each clone of the repository:
+
+```bash
+git config core.hooksPath tools/git-hooks
+```
+
+Run it by hand from the repository root:
+
+```bash
+python3 tools/check_l10n_conformance.py            # summary, new and open divergences
+python3 tools/check_l10n_conformance.py --verbose  # every check with its status
+```
+
+It only warns and always exits 0, so it never blocks a commit (`--strict` makes it exit 1 when there is a new divergence). Reading the result:
+
+- `WARNING NEW C-xx` is a new divergence. Either fix it, or record it in the [divergence register](../reference/official-localization-divergences.md) in the same change.
+- `open C-xx` is a known divergence that still needs a decision.
+- "N known divergences decided" counts the divergences that were deliberately kept.
+- `STALE C-xx` means a registered divergence now conforms: remove its row from the register.
+
 # Running on a local Odoo
 
 On a development machine with Odoo 19 Enterprise sources, the same run is:
