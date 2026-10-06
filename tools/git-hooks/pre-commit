@@ -1,0 +1,14 @@
+#!/bin/sh
+# Reports divergences from the official Odoo payroll localization conventions.
+# Warnings only: this hook always exits 0 so it never blocks a commit.
+# Install: ln -s ../../tools/git-hooks/pre-commit .git/hooks/pre-commit
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "pre-commit: python3 not found, skipping l10n conformance check"
+    exit 0
+fi
+
+python3 "$root/tools/check_l10n_conformance.py" || true
+exit 0
