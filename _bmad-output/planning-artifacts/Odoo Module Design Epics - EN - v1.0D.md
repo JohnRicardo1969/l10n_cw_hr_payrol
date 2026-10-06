@@ -65,8 +65,8 @@ This document breaks the requirements from the PRD and the Architecture Spine (w
 
 **Security and access**
 
-- FR026: Provide four security roles (Employee, Payroll User, Payroll Manager, Accountant) with least-privilege access.
-- FR027: Limit each employee to their own payslips with a record rule that matches the logged-in user (`employee_id.user_id = user`).
+- FR026: Provide four security roles (Employee, Payroll User, Payroll Manager, Accountant) with least-privilege access. *(Scope decided 2026-10-06: Payroll User includes Odoo's Payroll Officer role, which also manages employee records; Payroll Manager includes Odoo's Payroll Administrator role, which brings full HR administration; Accountant reads payroll runs, payslips and journal entries. See PRD "Users and Roles".)*
+- FR027: Limit each employee to their own payslips with a record rule that matches the logged-in user (`employee_id.user_id = user`). *(Decided 2026-10-06: only final payslips, state `validated` or `paid`; usable viewing and download for Employee and Accountant arrive with Stories 3.6/4.1.)*
 
 **Run membership and contract period**
 
@@ -247,8 +247,8 @@ So that each user can access only what their role permits.
 **Acceptance Criteria:**
 
 - **Given** the security data, **Then** four groups exist: Employee, Payroll User, Payroll Manager, and Accountant. (FR026)
-- **Given** an Employee user, **When** they open payslips, **Then** a record rule limits them to records where `employee_id.user_id = user`. (FR027)
-- **Given** each custom model, **Then** `ir.model.access` entries grant least-privilege CRUD aligned to the four roles.
+- **Given** an Employee user, **When** they open payslips, **Then** a record rule limits them to records where `employee_id.user_id = user`. (FR027) *(Narrowed 2026-10-06 to final payslips: `state in ('validated', 'paid')`.)*
+- **Given** each custom model, **Then** `ir.model.access` entries grant least-privilege CRUD aligned to the four roles. *(Role scope decided 2026-10-06 — see FR026 and PRD "Users and Roles".)*
 - **Given** the most senior existing role is Payroll Manager, **Then** no new group is introduced (the distribution gate reuses `group_l10n_cw_payroll_manager`). (AR019)
 
 ### Story 1.4: Dated statutory data models and lookup methods
@@ -585,6 +585,8 @@ So that corrections never double-count the year-to-date totals or post duplicate
 
 ### Story 3.6: Senior-only payslip distribution after close
 
+*Note 2026-10-06 (Story 1.3 review):* this story also makes payslips usable for the Employee and Accountant roles — read access to payslip lines, worked days and inputs (own records only for Employee), and a way to reach payslips in the UI. Story 1.3 delivered only the access rules on `hr.payslip`.
+
 As a payroll manager,
 I want distributing payslips to be a separate senior-only action after close,
 So that employees receive payslips only when they are explicitly released.
@@ -600,6 +602,8 @@ So that employees receive payslips only when they are explicitly released.
 Each closed run produces the official Curaçao documents and filings. Reports are read-only (Reports layer): they read committed amounts and recompute no statutory value.
 
 ### Story 4.1: Payslip PDF (A-01)
+
+*Note 2026-10-06 (Story 1.3 review):* the PDF must be downloadable by the Employee role for its own final payslips (and readable by the Accountant). Odoo's standard `/print/payslips` route only serves payroll users.
 
 As an employee,
 I want a payslip PDF in Curaçao layout,

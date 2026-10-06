@@ -129,10 +129,14 @@ Four user roles are supported. Role-to-user assignment is a per-organization con
 
 | Role | Odoo Group | Capabilities |
 |---|---|---|
-| Employee | `group_l10n_cw_employee` | View and download own payslips only |
-| Payroll User | `group_l10n_cw_payroll_user` | Compute runs, edit employee wage lines and payslip descriptions, read tax brackets |
-| Payroll Manager | `group_l10n_cw_payroll_manager` | Full access including tax bracket management and reopening closed runs |
-| Accountant | `group_l10n_cw_accountant` | Read payroll runs and journal entries; no write access to computation |
+| Employee | `group_l10n_cw_employee` | View and download own final (validated or paid) payslips only |
+| Payroll User | `group_l10n_cw_payroll_user` | Compute runs, edit employee wage lines and payslip descriptions, read tax brackets. Includes Odoo's Payroll Officer role, which also lets the user manage employee records |
+| Payroll Manager | `group_l10n_cw_payroll_manager` | Full access including tax bracket management and reopening closed runs. Includes Payroll User and Odoo's Payroll Administrator role (full HR administration) |
+| Accountant | `group_l10n_cw_accountant` | Read payroll runs, payslips and journal entries (includes Accounting read-only access); no write access to computation |
+
+*Decided 2026-10-06 by the PO, widening the original matrix:* Odoo binds all core payroll access to its own Payroll Officer and Payroll Administrator groups, so the Payroll User and Payroll Manager roles include them, with the HR rights those groups carry; the Accountant reads every payslip because a run is made of payslips. The roles are assigned as one choice per user (Settings → Users → "Salarisadministratie Curaçao").
+
+*Decided 2026-10-06 by the PO (Story 1.3 review):* employees see only their own **final** payslips (state `validated` or `paid`), never drafts. Story 1.3 delivers the access rules only; usable viewing and download for Employee and Accountant (read access to payslip lines, worked days and inputs, a menu to reach payslips, and a PDF download that works for these roles) is delivered by Stories 3.6 (distribution) and 4.1 (payslip PDF).
 
 The Employee group is intended for staff with internal Odoo user access. Portal-only employees are handled separately through the payslip distribution mechanism (see Open Questions).
 
@@ -513,16 +517,18 @@ Available natively with `hr_payroll`; no custom development required, though som
 
 # Security and Access Control
 
-The four user groups (see Users and Roles) enforce least privilege. A record rule restricts employees to their own payslips:
+The four user groups (see Users and Roles) enforce least privilege. A record rule restricts employees to their own final payslips (state filter decided 2026-10-06, Story 1.3 review):
 
 ```xml
 <record id="rule_payslip_employee_own" model="ir.rule">
     <field name="name">Employee: own payslips only</field>
     <field name="model_id" ref="hr_payroll.model_hr_payslip"/>
     <field name="groups" eval="[(4, ref('group_l10n_cw_employee'))]"/>
-    <field name="domain_force">[('employee_id.user_id', '=', user.id)]</field>
+    <field name="domain_force">[('employee_id.user_id', '=', user.id), ('state', 'in', ('validated', 'paid'))]</field>
 </record>
 ```
+
+Because Odoo combines the rules of all groups a user holds, the Accountant group carries its own all-payslips rule, so an Accountant who also holds the Employee role still reads every payslip.
 
 ## Data Protection
 

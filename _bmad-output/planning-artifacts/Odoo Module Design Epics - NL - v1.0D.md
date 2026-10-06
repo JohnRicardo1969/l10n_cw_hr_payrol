@@ -68,8 +68,8 @@ Dit document vertaalt de eisen uit de PRD en de Architecture Spine (met het v3.0
 
 **Beveiliging en toegang**
 
-- FR026: Lever vier beveiligingsrollen (Medewerker, Salarisgebruiker, Salarisbeheerder, Accountant) met minimale rechten.
-- FR027: Beperk elke medewerker tot zijn eigen loonstroken met een recordregel die de ingelogde gebruiker matcht (`employee_id.user_id = user`).
+- FR026: Lever vier beveiligingsrollen (Medewerker, Salarisgebruiker, Salarisbeheerder, Accountant) met minimale rechten. *(Reikwijdte besloten 2026-10-06: Salarisgebruiker omvat de Odoo-rol Payroll Officer, die ook medewerkergegevens beheert; Salarisbeheerder omvat de Odoo-rol Payroll Administrator, met volledig HR-beheer; Accountant leest salarisruns, loonstroken en journaalboekingen. Zie PRD "Users and Roles".)*
+- FR027: Beperk elke medewerker tot zijn eigen loonstroken met een recordregel die de ingelogde gebruiker matcht (`employee_id.user_id = user`). *(Besloten 2026-10-06: alleen definitieve loonstroken, status `validated` of `paid`; bruikbaar inzien en downloaden voor Medewerker en Accountant komt met Stories 3.6/4.1.)*
 
 **Run-lidmaatschap en contractperiode**
 
@@ -251,8 +251,8 @@ zodat elke gebruiker alleen toegang heeft tot wat zijn rol toestaat.
 **Acceptatiecriteria:**
 
 - **Gegeven** de beveiligingsdata, **dan** bestaan er vier groepen: Medewerker, Payroll-gebruiker, Payroll-manager en Accountant. (FR026)
-- **Gegeven** een Medewerker-gebruiker, **wanneer** deze loonstroken opent, **dan** beperkt een record rule hem tot records waar `employee_id.user_id = user`. (FR027)
-- **Gegeven** elk custom model, **dan** verlenen `ir.model.access`-vermeldingen least-privilege CRUD afgestemd op de vier rollen.
+- **Gegeven** een Medewerker-gebruiker, **wanneer** deze loonstroken opent, **dan** beperkt een record rule hem tot records waar `employee_id.user_id = user`. (FR027) *(Versmald 2026-10-06 tot definitieve loonstroken: `state in ('validated', 'paid')`.)*
+- **Gegeven** elk custom model, **dan** verlenen `ir.model.access`-vermeldingen least-privilege CRUD afgestemd op de vier rollen. *(Reikwijdte van de rollen besloten 2026-10-06 — zie FR026 en PRD "Users and Roles".)*
 - **Gegeven** dat de meest senior bestaande rol Payroll-manager is, **dan** wordt geen nieuwe groep geïntroduceerd (de distributiepoort hergebruikt `group_l10n_cw_payroll_manager`). (AR019)
 
 ### Story 1.4: Gedateerde wettelijke gegevensmodellen en opzoekmethoden
@@ -589,6 +589,8 @@ zodat correcties nooit de jaar-tot-datum-totalen dubbel tellen of dubbele of nie
 
 ### Story 3.6: Senior-only loonstrookdistributie na afsluiten
 
+*Notitie 2026-10-06 (review Story 1.3):* deze story maakt loonstroken ook bruikbaar voor de rollen Medewerker en Accountant — leesrechten op loonstrookregels, gewerkte dagen en invoer (voor Medewerker alleen de eigen records), en een manier om loonstroken in de interface te bereiken. Story 1.3 leverde alleen de toegangsregels op `hr.payslip`.
+
 Als salarisadministratie-manager,
 wil ik dat het distribueren van loonstroken een aparte senior-only actie is na afsluiten,
 zodat medewerkers loonstroken alleen ontvangen wanneer deze expliciet worden vrijgegeven.
@@ -604,6 +606,8 @@ zodat medewerkers loonstroken alleen ontvangen wanneer deze expliciet worden vri
 Elke afgesloten run produceert de officiële Curaçaose documenten en aangiften. Rapporten zijn read-only (Reports-laag): ze lezen vastgelegde bedragen en herberekenen geen enkele wettelijke waarde.
 
 ### Story 4.1: Loonstrook-PDF (A-01)
+
+*Notitie 2026-10-06 (review Story 1.3):* de PDF moet door de rol Medewerker te downloaden zijn voor de eigen definitieve loonstroken (en leesbaar voor de Accountant). De standaardroute `/print/payslips` van Odoo bedient alleen payroll-gebruikers.
 
 Als medewerker,
 wil ik een loonstrook-PDF in Curaçaose lay-out,
