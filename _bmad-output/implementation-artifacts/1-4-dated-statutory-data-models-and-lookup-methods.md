@@ -85,7 +85,7 @@ This story creates the models fresh (no migration needed yet), but the conventio
 
 ### References
 
-- [Source: _bmad-output/planning-artifacts/epics_EN-20261008.md#Story 1.4; #AR006, AR012, AR021, AR022, AR023, AR024]
+- [Source: _bmad-output/planning-artifacts/epics_EN-20261009.md#Story 1.4; #AR006, AR012, AR021, AR022, AR023, AR024]
 - [Source: _bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/ARCHITECTURE-SPINE.md#AD-5, AD-17, AD-18, AD-19, AD-20, AD-22]
 - [Source: docs/prd/PRD - v3.0D.md#hr.tax.bracket; #2026 Loonbelasting Table; #Rate Update Procedure]
 - [Source: docs/tech_design_l10n_cw_hr_payroll_v3.0D.txt#6.6 hr.tax.bracket (+ SUPERSEDED note), #Listing 5 compute_tax]

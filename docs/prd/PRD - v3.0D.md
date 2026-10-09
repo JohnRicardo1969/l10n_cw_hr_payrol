@@ -219,7 +219,7 @@ By convention, deduction rules return negative values, so that the NET rule can 
 
 ## Canonical Sequence Map
 
-The complete v1.0R sequence (Cessantia excluded — see Authoring Assumptions) is below. *(Decided 2026-10-08, superseding the earlier map: `EARNING` (15) and `UNTAXED_EARN` (16) are added; `BVZ_SUPPL` (30), `BVZ_SUPPL_EXTRA` (31) and `BVZ_TOTAL` (40) replace `BVZ_ER` and `BVZ_EMP`; `NET_PRE` (125), `NET_DED` (126) and `NET_CARRY` (128) are added before `NET`; the separate `NONTAXED` rule (formerly Seq 140) is removed; AOV/AWW and AVBZ use a monthly maximum.)* Correction lines from "Correct from [date]" and from the BVZ retroactive recalculation take the category of the corrected rule and a `CORR_*` code; the exact codes are left to the implementing story.
+The complete v1.0R sequence (Cessantia excluded — see Authoring Assumptions) is below. *(Decided 2026-10-08, superseding the earlier map: `EARNING` (15) and `UNTAXED_EARN` (16) are added; `BVZ_SUPPL` (30) and `BVZ_TOTAL` (40) replace `BVZ_ER` and `BVZ_EMP`; `NET_PRE` (125), `NET_DED` (126) and `NET_CARRY` (128) are added before `NET`; the separate `NONTAXED` rule (formerly Seq 140) is removed; AOV/AWW and AVBZ use a monthly maximum.)* *(Decided 2026-10-09, superseding the separate `BVZ_SUPPL_EXTRA` line at Seq 31: with OQ-14 resolved, `BVZ_SUPPL` holds the whole supplement, also under type `full`, and Seq 31 is removed.)* Correction lines from "Correct from [date]" and from the BVZ retroactive recalculation take the category of the corrected rule and a `CORR_*` code; the exact codes are left to the implementing story.
 
 | Seq | Code | Pseudocode Step | Description | On Payslip |
 |---|---|---|---|---|
@@ -231,8 +231,7 @@ The complete v1.0R sequence (Cessantia excluded — see Authoring Assumptions) i
 | 15 | EARNING | Step 1 | Generic taxable earning (`ALW`, employee wage lines) | Per line (show-on-payslip switch) |
 | 16 | UNTAXED_EARN | Step 1 | Untaxed earning (`ALW`, flagged `is_untaxed`, art. 6F lid 1 LLB) | Per line (show-on-payslip switch) |
 | 20 | BVZ_PREM_INC | Step 2 | BVZ premium income base (excludes untaxed earnings) | No |
-| 30 | BVZ_SUPPL | Step 3 | BVZ employer supplement, paid to the employee ("+" line, `ALW` flagged `is_untaxed`, pending OQ-14) | Yes |
-| 31 | BVZ_SUPPL_EXTRA | Step 3 | Part of the supplement above the statutory supplement under type `full` (own line pending OQ-14) | Yes |
+| 30 | BVZ_SUPPL | Step 3 | BVZ employer supplement, paid to the employee ("+" line, `ALW` flagged `is_untaxed`, not wage under art. 6F lid 1 sub l LLB; the whole supplement, including type `full`) | Yes |
 | 40 | BVZ_TOTAL | Step 4 | BVZ total premium ("−" line, `DED`), running total up to the pro-rated ceiling | Yes |
 | 50 | AOV_PREM_INC | Step 5 | AOV/AWW/AVBZ premium income base (excludes untaxed earnings) | No |
 | 60 | AOV_AWW_EMP | Step 6 | AOV/AWW employee 6.5% (up to monthly maximum) | Yes |
@@ -250,7 +249,7 @@ The complete v1.0R sequence (Cessantia excluded — see Authoring Assumptions) i
 | 126 | NET_DED | Step 13 | Net deductions (`DED`, employee wage lines) | Yes |
 | 128 | NET_CARRY | Step 13 | Net carry-over in (from the previous payroll) and out (shortfall to the next) | Yes |
 | 130 | NET | Step 13 | Net salary payable to employee | Yes |
-| 150 | TOTAL_ER_COST | Step 14 | Total employer cost, including the BVZ supplement lines (informational) | No |
+| 150 | TOTAL_ER_COST | Step 14 | Total employer cost, including the BVZ supplement `BVZ_SUPPL` (informational) | No |
 
 ## Step Design Detail
 
@@ -284,9 +283,9 @@ The formula is `basis = (version.wage if include_base_wage else 0) + Σ included
 
 The BVZ base derives from `categories.BASIC + categories.ALW` (overtime included) per **AD-14**, less the earnings flagged `is_untaxed` (decided 2026-10-08, superseding the base that included every `ALW` earning) — the verwervingskosten forfeit is **not** deducted here (AD-14 moves it to `TAX_INC` only). The base itself is **uncapped**; the ceiling is applied in the premium rules (Steps 3–4) using the BVZ running total of **AD-24** (rewritten 2026-10-08, superseding the cumulative method against the full annual ceiling). This rule is a shared intermediate and always executes. *(Resolved — F1: per the Landsverordening BVZ (P.B. 2013, no. 3) Art. 1.1(o) → Landsverordening inkomstenbelasting 1943 Art. 3(4), the BVZ premiegrondslag is the* zuivere opbrengst van arbeid *before persoonlijke aftrekposten, so the employee pension premium is **not** deducted here — confirming the AD-14 base. See `implementation-readiness-report-2026-07-04.md` F1.)*
 
-### Steps 3–4 — BVZ Supplement and Total Premium (Seq 30, 31, 40)
+### Steps 3–4 — BVZ Supplement and Total Premium (Seq 30, 40)
 
-*(Decided 2026-10-08, superseding the employer 9.3% `BVZ_ER` line in category `ER` and the employee 4.3% `BVZ_EMP` deduction.)* The whole BVZ premium is legally the employee's premium. The payslip shows the employer **supplement** as a "+" line (`BVZ_SUPPL`, paid to the employee as an untaxed earning, pending OQ-14) and the **total premium** as a "−" line (`BVZ_TOTAL`, category `DED`, negative). The net effect is that the employee bears only their own share. The supplement leaves category `ER` and sits inside NET; `TOTAL_ER_COST` still includes it because it is an employer cost. Under supplement type `full`, the part above the statutory supplement is a separate line (`BVZ_SUPPL_EXTRA`) so that it can be taxed separately until OQ-14 is resolved; its tax and premium-base treatment follows the OQ-14 outcome.
+*(Decided 2026-10-08, superseding the employer 9.3% `BVZ_ER` line in category `ER` and the employee 4.3% `BVZ_EMP` deduction.)* The whole BVZ premium is legally the employee's premium. The payslip shows the employer **supplement** as a "+" line (`BVZ_SUPPL`, paid to the employee as an untaxed earning) and the **total premium** as a "−" line (`BVZ_TOTAL`, category `DED`, negative). The net effect is that the employee bears only their own share. The supplement leaves category `ER` and sits inside NET; `TOTAL_ER_COST` still includes it because it is an employer cost. The supplement is not wage under art. 6F lid 1 sub l LLB: it is untaxed and outside every premium base (AOV/AWW, BVZ, AVBZ, ZV/OV), also under supplement type `full`; the `is_untaxed` flag on `BVZ_SUPPL` follows from the law, not from a provisional choice. `BVZ_SUPPL` holds the whole supplement: the statutory 9.3% or 2.8%, the full premium under type `full`, or 0 under `none` (decided 2026-10-09, superseding the separate `BVZ_SUPPL_EXTRA` line for the part above the statutory supplement under type `full`, pending OQ-14).
 
 **Employee fields (store facts, not percentages).**
 
@@ -317,7 +316,7 @@ The AOV base derives from `categories.BASIC + categories.ALW` (overtime included
 
 ### Step 6 — AOV/AWW (Seq 60, 61, 62)
 
-AOV and AWW are modeled as one combined premium. *(Decided 2026-10-08, superseding the cumulative annual-ceiling method of AD-24 for AOV/AWW.)* The employee pays 6.5% (AOV 6% + AWW 0.5%) and the employer 9.5% (AOV 9% + AWW 0.5%) on the base up to a **monthly maximum** of 100,000 ÷ 12 = XCG 8,333.33 (Gezamenlijke beschikking AOV/AWW en loonbelasting art. 6 lid 2). Each month stands alone: there is no running total, and reopening a month does not cascade into later months for AOV/AWW. For income above the monthly maximum, the employee pays an additional 1% surcharge (`AOV_AWW_1PCT`) on the excess above the **monthly** maximum only. The surcharge is zero for most employees and ensures compliance with the Landsverordening for high earners. Differences (for example income below the annual ceiling with a large bonus month, where the surcharge hits part of the bonus) are settled through the employee's annual assessment (AOV art. 29–30); this is correct by law. Part-year insurance pro-rata (AOV art. 26 lid 3) is applied in the assessment, not in payroll. AOV/AWW liability follows the employee's AOV-insured status, with its own AOV/AWW override (for example AWW art. 26 lid 2 sub b). Open: whether a bonus taxed via the bijzondere table gets its own premium room (OQ-16), and whether the 1% above the ceiling is an employee premium (OQ-17).
+AOV and AWW are modeled as one combined premium. *(Decided 2026-10-08, superseding the cumulative annual-ceiling method of AD-24 for AOV/AWW.)* The employee pays 6.5% (AOV 6% + AWW 0.5%) and the employer 9.5% (AOV 9% + AWW 0.5%) on the base up to a **monthly maximum** of 100,000 ÷ 12 = XCG 8,333.33 (Gezamenlijke beschikking AOV/AWW en loonbelasting art. 6 lid 2). Each month stands alone: there is no running total, and reopening a month does not cascade into later months for AOV/AWW. For income above the monthly maximum, the employee pays an additional 1% surcharge (`AOV_AWW_1PCT`) on the excess above the **monthly** maximum only. The surcharge is zero for most employees and ensures compliance with the Landsverordening for high earners. Differences (for example income below the annual ceiling with a large bonus month, where the surcharge hits part of the bonus) are settled through the employee's annual assessment (AOV art. 29–30); this is correct by law. Part-year insurance pro-rata (AOV art. 26 lid 3) is applied in the assessment, not in payroll. AOV/AWW liability follows the employee's AOV-insured status, with its own AOV/AWW override (for example AWW art. 26 lid 2 sub b). A bonus taxed via the bijzondere table gets no own AOV/AWW premium room: the maximum applies per pay period (Gezamenlijke beschikking AOV/AWW en loonbelasting 1976, art. 6 lid 2) and the bonus belongs to the wage of the month in which it is paid (LLB art. 8 lid 6) (OQ-16). The 1% above the monthly maximum is the employee's own premium (Lv AOV art. 26 lid 3); the employer's toeslag (Lv AOV art. 58) does not cover it, and the employer pays no surcharge (OQ-17). *(Decided 2026-10-09, superseding the open OQ-16 and OQ-17.)*
 
 ### Step 7 — AVBZ (Seq 70, 71)
 
@@ -329,7 +328,7 @@ AVBZ uses the AOV base up to a **monthly maximum** of 606,247.08 ÷ 12 = XCG 50,
 
 ### Step 11 — Extra Tax on Bijzondere Beloningen (Seq 110)
 
-When a bijzondere beloning is present (vakantiegeld, bonus, gratificatie, incidentele overuren), a single marginal rate is selected from the separate bijzondere-beloningen table (exclusief basiskorting, 6 bands) by the employee's **jaarloon** — by default the prior-year jaarloon, with a manager override to the current-year jaarloon when unrepresentative — and applied only to the bijzondere beloning amount. The tarief is fixed once per tax year, stored per (employee, year) as the carry-forward default, and the applied rate is recorded on the payslip line (AD-21). The earning stays in `ALW` (AOV/AWW, BVZ and AVBZ premiums apply; ZV/OV follow Step 12, so overtime on this route stays out of the ZV/OV base — decided 2026-10-08, superseding "SVB premiums apply" for ZV/OV) but is excluded from `TAX_INC`. The rule returns zero when there is no bijzondere beloning. Whether overtime is incidenteel (this table) or regulier (the maandtabel) is a manual payroll-manager choice.
+When a bijzondere beloning is present (vakantiegeld, bonus, gratificatie, incidentele overuren), a single marginal rate is selected from the separate bijzondere-beloningen table (exclusief basiskorting, 6 bands) by the employee's **jaarloon** — by default the prior-year jaarloon, with a manager override to the current-year jaarloon when unrepresentative — and applied only to the bijzondere beloning amount. The tarief is fixed once per tax year, stored per (employee, year) as the carry-forward default, and the applied rate is recorded on the payslip line (AD-21). The earning stays in `ALW` (AOV/AWW, BVZ and AVBZ premiums apply; ZV/OV follow Step 12, so overtime on this route stays out of the ZV/OV base — decided 2026-10-08, superseding "SVB premiums apply" for ZV/OV) but is excluded from `TAX_INC`. It gets no own AOV/AWW premium room: it counts toward the monthly maximum of the month in which it is paid (Step 6; decided 2026-10-09, superseding the open OQ-16). The rule returns zero when there is no bijzondere beloning. Whether overtime is incidenteel (this table) or regulier (the maandtabel) is a manual payroll-manager choice.
 
 ### Step 12 — ZV and OV (Seq 120, 121)
 
@@ -363,7 +362,7 @@ A variant is a net deduction for a health-insurance premium (or similar) that si
 
 ### Step 14 — Total Employer Cost (Seq 150)
 
-An informational aggregate of total loon plus the employer-contribution category plus the BVZ supplement lines (decided 2026-10-08, superseding the aggregate in which the BVZ employer share sat in `ER`: the supplement now sits in `ALW` but remains an employer cost). It does not affect net pay and is used for labour-cost reporting only.
+An informational aggregate of total loon plus the employer-contribution category plus the BVZ supplement `BVZ_SUPPL` (decided 2026-10-09, superseding "the BVZ supplement lines", which included `BVZ_SUPPL_EXTRA`; decided 2026-10-08, superseding the aggregate in which the BVZ employer share sat in `ER`: the supplement now sits in `ALW` but remains an employer cost). It does not affect net pay and is used for labour-cost reporting only.
 
 ### Corrections — Correct from [date]
 
@@ -388,7 +387,7 @@ The enabled flag applies only to premium and tax computation rules, never to the
 
 | Seq | Code | Reason |
 |---|---|---|
-| 20 | BVZ_PREM_INC | Base for BVZ_SUPPL, BVZ_SUPPL_EXTRA and BVZ_TOTAL |
+| 20 | BVZ_PREM_INC | Base for BVZ_SUPPL and BVZ_TOTAL (decided 2026-10-09, superseding the list with `BVZ_SUPPL_EXTRA`) |
 | 50 | AOV_PREM_INC | Base for AOV/AWW, the surcharge, and AVBZ |
 | 80 | TAX_INC | Base for LOONBEL_RAW |
 | 90 | LOONBEL_RAW | Base for LOONBEL |
@@ -588,7 +587,7 @@ Overtime that does not meet all three conditions falls back to a taxable route (
 
 ## Rate Update Procedure
 
-Rates change without code deployment. The administrator opens Salarisadministratie → Configuratie → Tarieven, sets `valid_to` on all expiring records, and creates new records with the updated `valid_from` and rates. For the loonbelasting table, leave the prior year's `valid_to` empty until the new year's table is uploaded — closing it early disables the prior-year fallback (decided 2026-10-04). Historical records are never deleted, because they are required to recompute prior payslips correctly.
+Rates change without code deployment. The administrator opens Salarisadministratie → Configuratie → Tarieven, first records the new values with the updated `valid_from` and rates, and only then sets `valid_to` on the records they replace (decided 2026-10-09, superseding the order "set `valid_to` on all expiring records, then create new records"). For the loonbelasting table, leave the prior year's `valid_to` empty until the new year's table is uploaded — closing it early disables the prior-year fallback (decided 2026-10-04). The SVB parameters have no fallback: without an `hr.svb.parameters` record for the new year the calculation stops (AD-18/AD-22; decided 2026-10-09). Historical records are never deleted, because they are required to recompute prior payslips correctly.
 
 # Payroll Run Lifecycle
 
@@ -634,7 +633,7 @@ Closing a run posts a balanced journal entry. The GL account numbers below are i
 | TOTAL_LOON + EARNING | Debit | 6100 | Salary expense (gross incl. Bijtelling and generic earnings) |
 | AOV_AWW_ER | Debit | 6200 | Employer AOV/AWW cost |
 | AVBZ_ER | Debit | 6210 | Employer AVBZ cost |
-| BVZ_SUPPL + BVZ_SUPPL_EXTRA | Debit | 6220 | Employer BVZ cost (supplement paid to the employee) |
+| BVZ_SUPPL | Debit | 6220 | Employer BVZ cost (the whole supplement paid to the employee; decided 2026-10-09, superseding `BVZ_SUPPL` + `BVZ_SUPPL_EXTRA`) |
 | ZV_ER | Debit | 6230 | Employer ZV cost |
 | OV_ER | Debit | 6240 | Employer OV cost |
 | UNTAXED_EARN | Debit | 6260 | Onbelaste vergoedingen (employer cost) |
@@ -653,7 +652,7 @@ The Bijtelling in-kind offset (Step 1) affects how wage in kind is posted agains
 
 ## Balance Identity
 
-Total debit equals salary expense (including Bijtelling and generic earnings) plus untaxed earnings plus the BVZ supplement plus all other employer contributions plus any carry-out receivable. Total credit equals net payable plus all tax and premium payables (including the total BVZ premium) plus the creditor payables for net deductions plus any carry-in settlement. By the definition of NET (BASIC + ALW = NET + all employee deductions, where `ALW` contains the untaxed earnings and the BVZ supplement and `DED` contains the total BVZ premium and the net deductions), each debit has a matching credit, so debit equals credit by construction (decided 2026-10-08, superseding the identity that added non-taxed reimbursements on both sides).
+Total debit equals salary expense (including Bijtelling and generic earnings) plus untaxed earnings plus the BVZ supplement (`BVZ_SUPPL` only; decided 2026-10-09, superseding the supplement split over `BVZ_SUPPL` and `BVZ_SUPPL_EXTRA`) plus all other employer contributions plus any carry-out receivable. Total credit equals net payable plus all tax and premium payables (including the total BVZ premium) plus the creditor payables for net deductions plus any carry-in settlement. By the definition of NET (BASIC + ALW = NET + all employee deductions, where `ALW` contains the untaxed earnings and the BVZ supplement and `DED` contains the total BVZ premium and the net deductions), each debit has a matching credit, so debit equals credit by construction (decided 2026-10-08, superseding the identity that added non-taxed reimbursements on both sides).
 
 # Reports
 
@@ -723,7 +722,7 @@ The module is published as version `19.0.0.1.0`, category `Human Resources/Payro
 
 # Open Questions and Assumptions
 
-The following items are within scope but require explicit decisions before the affected components can be designed in detail. They do not block the v1.0R milestone unless stated. OQ-13 to OQ-23 were added and OQ-08 was resolved on 2026-10-08.
+The following items are within scope but require explicit decisions before the affected components can be designed in detail. They do not block the v1.0R milestone unless stated. OQ-13 to OQ-23 were added and OQ-08 was resolved on 2026-10-08; OQ-14, OQ-16 and OQ-17 were resolved on 2026-10-09.
 
 | # | Item | Decision required | Blocks |
 |---|---|---|---|
@@ -740,15 +739,15 @@ The following items are within scope but require explicit decisions before the a
 | OQ-11 | Vacation first-year proration basis | Answered for the grant side by monthly accrual, partial months pro rata (decided 2026-10-08, superseding the 1 January grant). Remaining: the partial-month basis (calendar days vs working days); see `docs/design/cw-vacation-accrual-v1.1R.md` | v1.1R |
 | OQ-12 | Vacation carryover take-window | Confirm which Curaçao employers qualify as continuous operation (6-month vs 3-month window to take carried-over days); see `docs/design/cw-vacation-accrual-v1.1R.md` | v1.1R |
 | OQ-13 | Hourly wage "SVB wage" variant | The exact meaning of the SVB-wage based hourly rate in the calculation settings (the standard variant is contract wage ÷ 173.33) | Story 1.11 (SVB-wage variant only) |
-| OQ-14 | Tax treatment of the BVZ supplement | Statutory contradiction, not settled: an earlier PO answer cites art. 6F lid 1 sub l LLB as exempting employer supplements for AOV/AWW/AVBZ/BVZ premiums; a later answer could not find that exemption. Until resolved, the part paid under supplement type `full` above the statutory minimum is a separate payslip line (`BVZ_SUPPL_EXTRA`) so it can be taxed separately | Story 2.3 (final tax treatment of the supplement; the interim separate line does not block the build) |
-| OQ-15 | Correction reporting procedure | How corrections from "Correct from [date]" are reported to the Belastingdienst and the SVB for the periods they relate to | Story 3.8 |
-| OQ-16 | Premium room for a bijzondere bonus | Belastingdienst check: does a bonus taxed via the bijzondere table get its own AOV/AWW premium room under the monthly maximum? | Story 2.4 |
-| OQ-17 | Who pays the AOV 1% above the ceiling | Belastingdienst check: is the 1% above the ceiling an employee premium? AOV art. 27 lid 2 is not explicit | Story 2.4 |
-| OQ-18 | SVB acceptance of BVZ above 1/12 per month | Does the SVB/Belastingdienst accept a monthly return with a BVZ premium above 150,000/12 in a month? If not, BVZ moves to a monthly maximum as a single company-level setting — not built until required | Non-blocking |
+| OQ-14 | Tax treatment of the BVZ supplement | **Resolved 2026-10-09:** the BVZ supplement is not wage (art. 6F lid 1 sub l LLB): untaxed and outside every premium base (AOV/AWW, BVZ, AVBZ, ZV/OV), also under supplement type `full`. `BVZ_SUPPL` holds the whole supplement and the separate `BVZ_SUPPL_EXTRA` line (Seq 31) is removed (decided 2026-10-09, superseding the statutory contradiction and the interim separate line for the part above the statutory supplement) | Resolved |
+| OQ-15 | Correction reporting procedure | How corrections from "Correct from [date]" are reported to the Belastingdienst and the SVB for the periods they relate to. Legal framework (added 2026-10-09): monthly return per calendar month (ALL art. 8 lid 3), naheffing when too little was withheld (ALL art. 16), ambtshalve vermindering when too much was withheld (ALL art. 39a lid 2), restitution and collection of premiums (Lv AOV art. 30); the practical reporting method is still to be agreed with the Belastingdienst and the SVB | Story 3.8 |
+| OQ-16 | Premium room for a bijzondere bonus | **Resolved 2026-10-09:** a bonus taxed via the bijzondere table gets no own AOV/AWW premium room; the maximum applies per pay period (Gezamenlijke beschikking AOV/AWW en loonbelasting 1976, art. 6 lid 2) and the bonus belongs to the wage of the month it is paid in (LLB art. 8 lid 6) (decided 2026-10-09, superseding the open Belastingdienst check) | Resolved |
+| OQ-17 | Who pays the AOV 1% above the ceiling | **Resolved 2026-10-09:** the 1% above the AOV/AWW monthly maximum is the employee's own premium (Lv AOV art. 26 lid 3); the employer's toeslag (Lv AOV art. 58) does not cover it and the employer pays no surcharge (decided 2026-10-09, superseding the open Belastingdienst check) | Resolved |
+| OQ-18 | SVB acceptance of BVZ above 1/12 per month | Does the SVB/Belastingdienst accept a monthly return with a BVZ premium above 150,000/12 in a month? If not, BVZ moves to a monthly maximum as a single company-level setting — not built until required. Legal reference (added 2026-10-09): BVZ is levied over the zuiver voljaarsloon (Lv BVZ art. 22 lid 3); acceptance of the monthly return is still to be confirmed | Non-blocking |
 | OQ-19 | BVZ annual recalculation vs generic correction | Does the BVZ-specific retroactive annual recalculation add anything beyond "Correct from [date]" and the BVZ running total? Both are built as requested. Optional enhancement, not an acceptance criterion: the system suggests AOV-insured = no from the date of birth (age 65), with manual confirmation | Non-blocking (Story 2.3 builds the option as requested) |
 | OQ-20 | Bijtelling in-kind presentation in net | PO confirmation of how the non-cash offset that keeps Bijtelling (wage in kind) out of cash net pay is presented: an offset line or a separate category | Story 2.11 (net presentation) |
 | OQ-21 | Lei di Bion income limit | The amount of the income limit of Arbeidsregeling art. 3 and where it is published, to be held as dated data (AD-5) | Story 2.9 (income-limit check only) |
-| OQ-22 | OV wage definition | Does the OV ordinance use the same wage definition as the ZV ordinance? Until confirmed, OV uses the ZV base | Non-blocking (blocks only a later change to the OV base) |
+| OQ-22 | OV wage definition | Does the OV ordinance use the same wage definition as the ZV ordinance? Until confirmed, OV uses the ZV base. Note (added 2026-10-09): the OV and ZV ordinances are not in the Fiscale Wetgeving 2026 bundle; ask the SVB | Non-blocking (blocks only a later change to the OV base) |
 | OQ-23 | Licence and provider permission for a restore | What the licence of this payroll module is, how it is entered, and how the provider's permission for restoring a pre-year-close backup after a new licence was entered is given and recorded | Story 3.7 (restore guidance only) |
 
 # Acceptance Criteria
