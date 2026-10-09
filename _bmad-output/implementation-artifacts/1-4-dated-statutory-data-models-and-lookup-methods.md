@@ -27,7 +27,7 @@ so that rates and tables are maintained as data and read reproducibly by effecti
   - [ ] `@api.model compute_tax(tax_type, date)` → the dated **scalar** (flat amount/rate) for `tax_type` effective on `date`, `round(x, 2)`. **No `today()` default — `date` is required** (AD-17). Missing record → `UserError` naming the `tax_type` and date (AD-18).
   - [ ] `@api.model lookup_marginal_rate(jaarloon, tax_type, date)` → the **single band rate** whose range contains `jaarloon`: match `income_from ≤ jaarloon < income_to`, `income_to = 0` = top band uncapped; **no accumulation**. Same dated selection + fail-loud.
 - [ ] **Task 2 — `hr.svb.parameters` model** (AC: 1, 4, 5, 6)
-  - [ ] Create `models/hr_svb_parameters.py`: per-year header — `year` (Integer), `valid_from`, `valid_to` (nullable), `active`; rate fields (all **percentages**, e.g. `bvz_er = 9.3`): `aov_er`, `aov_emp`, `aww_er`, `aww_emp`, `bvz_er`, `bvz_emp`, `avbz_er`, `avbz_emp`, `zv`, `bvz_pensioner`, `bvz_self`, `aov_surcharge_rate`; annual ceilings `aov_aww_grens`, `bvz_grens`, `avbz_grens`; monthly cap `zv_ov_loongrens_month`. Inherit `mail.thread`. SQL constraint: unique `year` per version window is NOT required (corrections allowed) — do not over-constrain.
+  - [ ] Create `models/hr_svb_parameters.py`: per-year header — `year` (Integer), `valid_from`, `valid_to` (nullable), `active`; rate fields (all **percentages**, e.g. `bvz_er = 9.3`): `aov_er`, `aov_emp`, `aww_er`, `aww_emp`, `bvz_er`, `bvz_emp`, `avbz_er`, `avbz_emp`, `zv`, `bvz_pensioner`, `bvz_pensioner_supplement` (2.8 — the employer supplement for an employee who is not AOV-insured, Landsbesluit BVZ art. 7 lid 2; the SVB-Tabel lists only the 6.5% rate; added 2026-10-08), `bvz_self`, `aov_surcharge_rate`; annual ceilings `aov_aww_grens`, `bvz_grens`, `avbz_grens`; monthly cap `zv_ov_loongrens_month`. Inherit `mail.thread`. SQL constraint: unique `year` per version window is NOT required (corrections allowed) — do not over-constrain.
   - [ ] Selection helper `@api.model get_params(date)`: among `active=True` records with `year = date.year` AND `valid_from ≤ date` AND (`valid_to` null or `≥ date`), pick latest by `valid_from desc, id desc`. **No prior-year fallback** — a January payslip with no current-year record fails loud (`UserError`) (AD-22).
 - [ ] **Task 3 — `hr.loonbelasting.tabel` (+ `.lijn`) model + lookup** (AC: 1, 2, 3, 4, 5, 6)
   - [ ] Create `models/hr_loonbelasting_tabel.py`: header fields `name`, `period_type` (Selection; v1.0R: `maand`; keep `week`/`dag`/`halvedag`/`quincena`/`kwartaal` values in the selection for v1.1R), `year` (Integer), `valid_from`, `valid_to` (nullable), `active`, `above_ceiling_rate` (Float — 46.5 for 2026; a **header field**, never a code literal), `lijn_ids` One2many. Row model `hr.loonbelasting.tabel.lijn`: `tabel_id`, `wage_from` (Float), `loonbelasting` (Float); unique `(tabel_id, wage_from)`.
@@ -50,6 +50,7 @@ so that rates and tables are maintained as data and read reproducibly by effecti
   - `hr.tax.bracket`: no year field — a scalar carries over only while its own `valid_to` is open.
   - Do not harmonise these three rules; the asymmetry is a product-owner decision.
 - **Effective date:** always passed explicitly; in payroll context it is `payslip.date_to` (AD-17). No method may default to `today()` — the v3.0D `compute_tax` defaulting to `today()` is an identified defect; do not copy it.
+- **Ceilings are stored annually; the consumer decides the method (decided 2026-10-08, superseding cumulative AOV/AWW and AVBZ).** AOV/AWW (incl. the 1% surcharge) and AVBZ divide the annual ceiling by 12 and cap each month; BVZ keeps the running total (AD-24, BVZ only). This story only stores `aov_aww_grens`, `bvz_grens`, `avbz_grens` — no monthly-ceiling fields for these three.
 - **Data records hold only rates/ceilings/bounds — never arithmetic.** Capping, summing (e.g. `aov_emp + aww_emp`), and de-annualisation live in the salary rules (Epic 2), not in these models.
 - **Rate unit:** every rate field is a percentage (9.3 means 9.3%); the consumer divides by 100. No fractions.
 - **Append-only:** supersede = set `valid_to` + insert new `valid_from`; never delete. Superseded lb-tabel headers may be archived (`active=False`) once replaced but are retained. Enforce "never lose history" at review level; do not build a delete-blocking override unless trivial (`ondelete` guards on rows are fine).
@@ -84,7 +85,7 @@ This story creates the models fresh (no migration needed yet), but the conventio
 
 ### References
 
-- [Source: _bmad-output/planning-artifacts/Odoo Module Design Epics - EN - v1.0D.md#Story 1.4; #AR006, AR012, AR021, AR022, AR023, AR024]
+- [Source: _bmad-output/planning-artifacts/epics_EN-20261008.md#Story 1.4; #AR006, AR012, AR021, AR022, AR023, AR024]
 - [Source: _bmad-output/planning-artifacts/architecture/architecture-l10n_cw_hr_payrol-2026-06-25/ARCHITECTURE-SPINE.md#AD-5, AD-17, AD-18, AD-19, AD-20, AD-22]
 - [Source: docs/prd/PRD - v3.0D.md#hr.tax.bracket; #2026 Loonbelasting Table; #Rate Update Procedure]
 - [Source: docs/tech_design_l10n_cw_hr_payroll_v3.0D.txt#6.6 hr.tax.bracket (+ SUPERSEDED note), #Listing 5 compute_tax]
@@ -103,3 +104,4 @@ This story creates the models fresh (no migration needed yet), but the conventio
 ## Change Log
 
 - 2026-10-04: AD-20 lb-tabel selection amended (PO decision): prior-year still-open table is the fallback until the new year's table is uploaded; `year = date.year` replaced by `year in (date.year, date.year - 1)` with `year desc` ordering. Updated AC3, AC4, Task 3 lookup bullet, Task 5 tests, and the Dev Notes selection rule. SVB `get_params` keeps no prior-year fallback (AD-22).
+- 2026-10-08: `hr.svb.parameters` gains `bvz_pensioner_supplement` (2.8%) for the BVZ redesign (AOV-insured status drives 13.6% / 6.5%; statutory supplement 9.3% / 2.8%). Note added that AOV/AWW and AVBZ now use a monthly maximum (annual ceiling ÷ 12) and AD-24 binds BVZ only; no field change for that (PO decisions 2026-10-08).

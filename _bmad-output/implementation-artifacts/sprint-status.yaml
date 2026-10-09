@@ -47,7 +47,7 @@
 #   pull it into the v1.0R sprint before Epics 1-4 are done.
 
 generated: 2026-07-07
-last_updated: 2026-10-04
+last_updated: 2026-10-08
 project: l10n_cw_hr_payrol
 project_key: NOKEY
 tracking_system: file-system
@@ -66,6 +66,7 @@ development_status:
   1-8-apply-wizard-for-wage-component-sets: backlog
   1-9-employee-and-contract-statutory-fields: backlog
   1-10-year-to-date-totals-model: backlog
+  1-11-calculation-settings-for-calculated-wage-line-amounts: backlog
   epic-1-retrospective: optional
 
   # ----- Epic 2: Statutory Payroll Calculation Engine (v1.0R) -----
@@ -80,9 +81,13 @@ development_status:
   2-8-bijzondere-beloningen-extra-tax: backlog
   2-9-lei-di-bion-exempt-overtime: backlog
   2-10-zv-and-ov-employer-premiums: backlog
-  2-11-net-pay-untaxed-reimbursements-and-employer-cost: backlog
+  2-11-net-pay-and-employer-cost: backlog
   2-12-enable-disable-gate-and-never-gate-set: backlog
   2-13-statutory-reconciliation-for-representative-employees: backlog
+  2-14-generic-taxable-earnings-and-employee-level-bijtelling: backlog
+  2-15-untaxed-earnings: backlog
+  2-16-net-deductions: backlog
+  2-17-net-carry-over: backlog
   epic-2-retrospective: optional
 
   # ----- Epic 3: Run Lifecycle, Accounting & Distribution (v1.0R) -----
@@ -93,6 +98,8 @@ development_status:
   3-4-balanced-journal-entry-by-construction: backlog
   3-5-controlled-reopen-and-idempotent-re-close: backlog
   3-6-senior-only-payslip-distribution-after-close: backlog
+  3-7-year-closing: backlog
+  3-8-correct-from-date: backlog
   epic-3-retrospective: optional
 
   # ----- Epic 4: Statutory Reports (v1.0R) -----
@@ -107,7 +114,7 @@ development_status:
   epic-5: backlog
   5-1-seed-cw-vacation-leave-type-and-public-holidays: backlog
   5-2-compute-yearly-entitlement-from-working-schedule: backlog
-  5-3-grant-yearly-allocation-and-prorate-mid-year-starts: backlog
+  5-3-monthly-accrual-through-a-time-off-accrual-plan: backlog
   5-4-carryover-cap-and-lapse-on-long-absence: backlog
   5-5-payout-unused-vacation-days-on-termination: backlog
   epic-5-retrospective: optional
