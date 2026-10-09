@@ -101,8 +101,14 @@ flowchart TD
   of its categories.
 - **Wage in kind is not cash** *(added 2026-10-08)*. Bijtelling (natura-loon) wage lines are in
   `TOTAL_LOON`, so in gross, `TAX_INC` and the premium bases, but are not paid in cash, so they must
-  **not raise cash net pay** — a matching non-cash offset is required. The offset's presentation (offset
-  line vs separate category) is **open (OQ-20)**; this AD fixes only the requirement.
+  **not raise cash net pay** — a matching non-cash offset is required.
+- **Bijtelling offset, Seq 127** *(decided 2026-10-09, OQ-20, superseding "the offset's presentation —
+  offset line vs separate category — is open (OQ-20)")*: Bijtelling stays inside `TOTAL_LOON`
+  (`BASIC`) and is shown as its own payslip line; it is not a separate category, so `NET`, the AD-14
+  bases and `TAX_INC` are unchanged. The offset is one rule at **Seq 127**, a **negative `DED`** line
+  equal to the period's Bijtelling, after `NET_DED` (126) and before `NET_CARRY` (128), so a net that
+  the offset pushes below zero is caught by the carry-over (AD-29). It is never gated (AD-6). Its code
+  is fixed by Story 2.11. On the journal it credits an in-kind counter-account (AD-10).
 
 ### AD-3 — Strict sequence + reference discipline `[ADOPTED]`
 
@@ -156,7 +162,8 @@ flowchart TD
     single source of truth for every SVB rate and ceiling.
   - **Loonbelasting** → the official `lb-*tabel` in `hr.loonbelasting.tabel` (AD-20). The Schijventarief
     (inkomstenbelasting bracket table) is **not** the withholding instrument and must not be used.
-  - **Bijzondere beloningen + the Belastingdienst scalars** (basiskorting, verwervingskosten, toeslagen)
+  - **Bijzondere beloningen + the Belastingdienst scalars** (basiskorting, verwervingskosten, toeslagen,
+    and the Lei di Bion income limit `lei_di_bion_inkomensgrens` of AD-23 — added 2026-10-09, OQ-21)
     → `hr.tax.bracket`, keyed by `tax_type` (`income_from`/`income_to`, `rate`, `valid_from`/`valid_to`;
     no payer field).
 - **Read/representation contract** — so two authors encode and read identically:
@@ -166,7 +173,7 @@ flowchart TD
     income_to` (matching the table's *"groter of gelijk aan … maar kleiner dan"*; `income_to = 0` = top
     band, uncapped) — it does **not** accumulate. EXTRA_TAX applies that one rate to the
     bijzondere-beloning amount (see AD-21).
-  - *Dated scalar* (basiskorting, verwervingskosten, toeslagen, in `hr.tax.bracket`): a single dated
+  - *Dated scalar* (basiskorting, verwervingskosten, toeslagen, Lei di Bion income limit, in `hr.tax.bracket`): a single dated
     value read by `compute_tax(tax_type, date)` (the one surviving caller of `compute_tax` after the
     SVB move) — a flat amount/rate, no band accumulation.
   - *SVB premium* (in `hr.svb.parameters`, AD-22): the rule reads the relevant rate and ceiling **field**
@@ -190,15 +197,18 @@ flowchart TD
 
 ### AD-6 — Enable/disable gate + never-gate set `[ADOPTED]`
 
-- **Binds:** all premium/tax computation rules and the eight shared intermediates.
+- **Binds:** all premium/tax computation rules and the nine never-gated shared rules (the Bijtelling offset added 2026-10-09).
 - **Prevents:** gating a shared base (e.g. `AOV_PREM_INC`) and silently breaking AVBZ for an
   AOV-exempt employee.
 - **Rule:** each premium/tax rule checks its `hr.employee.wage.line.enabled`; if `False` → `result =
   0.00`, skip logic (downstream receives `0.00`, never an error or stale value). The **never-gate set
   always executes** regardless of any flag: `BVZ_PREM_INC` (20), `AOV_PREM_INC` (50), `TAX_INC` (80),
-  `LOONBEL_RAW` (90), `NET_PRE` (125), `NET_CARRY` (128), `NET` (130), `TOTAL_ER_COST` (150).
+  `LOONBEL_RAW` (90), `NET_PRE` (125), the Bijtelling offset (127), `NET_CARRY` (128), `NET` (130),
+  `TOTAL_ER_COST` (150).
   *(decided 2026-10-08, superseding the six-rule set: `NET_PRE`, the net before net deductions, and
   `NET_CARRY`, the automatic net carry-over of AD-29, are shared bases/outputs and are never gated.)*
+  *(Decided 2026-10-09, OQ-20, adding the Bijtelling offset (Seq 127): gating it would pay wage in kind
+  out as cash.)*
 - **BVZ exempt is the per-year gate for BVZ** *(added 2026-10-08)*: the employee's BVZ-exempt switch is
   the existing `enabled` gate, set per tax year, and overrides the AOV-insured status and the supplement
   type (AD-24). AOV/AWW liability follows the employee's AOV-insured status with its own AOV/AWW
@@ -290,11 +300,15 @@ flowchart TD
     the move does not double-count it. There is no separate debit for a part above the statutory
     supplement *(decided 2026-10-09, OQ-14, superseding the separate `BVZ_SUPPL_EXTRA` line)*. The **SVB payable** is
     the **total** BVZ premium (`BVZ_TOTAL`). Which GL account carries the supplement is open with the rest of OQ-05.
-  - **Balance identity (updated):** gross wage (incl. untaxed earnings, the BVZ supplement, and the
-    non-cash Bijtelling offset whose presentation is open in OQ-20) = cash
-    net paid + Σ employee deductions (tax, premiums incl. `BVZ_TOTAL`, net deductions) − carry-over
-    receivable change; the employer side debits each employer cost once against its payable. Debit ≡
-    credit still follows by construction.
+  - **Bijtelling offset** (AD-2, Seq 127) *(decided 2026-10-09, OQ-20)*: Bijtelling is debited with the
+    gross wage; the offset line **credits an in-kind counter-account** (an indicative placeholder, mapped
+    per company at onboarding like the other GL numbers), so the non-cash wage is not credited to net
+    payable and the move still balances.
+  - **Balance identity (updated):** gross wage (incl. Bijtelling, untaxed earnings and the BVZ
+    supplement) = cash net paid + Σ employee deductions (tax, premiums incl. `BVZ_TOTAL`, net
+    deductions, the Bijtelling offset) − carry-over receivable change; the employer side debits each
+    employer cost once against its payable. Debit ≡ credit still follows by construction *(decided
+    2026-10-09, superseding "the non-cash Bijtelling offset whose presentation is open in OQ-20")*.
   - **Corrections** (AD-30) are ordinary lines on the current payslip and post with it; closed periods'
     moves are never altered.
 
@@ -384,8 +398,24 @@ flowchart TD
   - Generic taxable earnings follow their per-line flag (default on); untaxed earnings default off.
     `BVZ_SUPPL` is **never** in the ZV/OV base: the flag is fixed off for it (not wage, art. 6F lid 1
     sub l LLB; decided 2026-10-09, OQ-14, superseding its open treatment pending OQ-14).
-  - **OV** uses the same base as ZV pending confirmation that the OV ordinance has the same wage
-    definition (**OQ-22**, non-blocking).
+  - **Pro-rata fixed periodic payments** *(decided 2026-10-09, OQ-22, PO)*: an `EARNING` line flagged
+    **"vaste periodieke uitkering"** (e.g. vakantiegeld, a 13th month that is structurally part of the
+    terms of employment) carries an annual amount; each month **annual ÷ 12** is added to the ZV/OV
+    base, and the actual payout of that line is **excluded** from the ZV/OV base, so it is never
+    counted twice. The same monthly reserve feeds the SVB-wage hourly rate (AD-26). Mechanism detail:
+    Story 2.10 (ZV/OV) and Story 1.11 (hourly rate).
+  - **OV uses the same SVB-loon as ZV** *(decided 2026-10-09, OQ-22, superseding "pending confirmation
+    that the OV ordinance has the same wage definition")*: one base for both, capped at the shared
+    monthly limit; only the insured population differs.
+  - **Who is insured** *(decided 2026-10-09, OQ-22)*: ZV covers only employees who work 5 or 6 days a
+    week and whose wage on the peildatum of 1 November of the previous year was below the SVB
+    loongrens; OV covers every employee, whatever the wage or the number of working days.
+    **The module determines ZV insurance itself** *(decided 2026-10-09, superseding the proposed
+    default in which the payroll clerk ran the peildatum test; open: OQ-24)*: with fewer than 5
+    working days a week (from the working schedule) it sets the ZV wage line to `enabled=False`
+    (AD-6/AD-7 gate, `active=True`) at once, and with a wage above the SVB loongrens on the
+    peildatum (1 November of the previous year) for the following calendar year. The payroll clerk
+    can override this per employee, with a mandatory reason recorded on the employee.
 
 ### AD-15 — Default Odoo presentation (no custom theme) `[ADOPTED]`
 
@@ -718,11 +748,19 @@ flowchart TD
       received the approval in time to calculate the first payroll of the year; eligibility is
       evaluated against this validity window at `payslip.date_to` (decided 2026-10-08).
     - **Legal basis:** art. 6F lid 1 sub v and lid 5–6 LLB. The employer requests it within two weeks
-      after the start of the calendar year, with the overtime register (Arbeidsregeling art. 30) and an
-      estimate of overtime per employee. The Inspecteur decides by beschikking within two weeks; without
+      after the start of the calendar year **or after the start of employment**, with the overtime
+      register (Arbeidsregeling art. 30) and an estimate of overtime per employee. At request the
+      employee must have worked regular overtime in **at least 6 of the past 12 months**, and the
+      employer must have filed the previous year's verzamelloonstaat *(decided 2026-10-09, OQ-21,
+      superseding the request deadline tied to the start of the calendar year only; sources: the
+      Belastingdienst page "Vrijstelling van loonbelasting en sociale lasten mogelijk dankzij Lei di Bion",
+      https://belastingdienst.cw/vrijstelling-van-loonbelasting-en-sociale-lasten-mogelijk-dankzij-lei-di-bion/,
+      and the request guidance "Verzoek vrijstelling LB en Sociale lasten Overwerkloon (Lei di Bion)",
+      `docs/Toelichting-overwerkregistratie-2026.pdf`)*. The Inspecteur decides by beschikking within two weeks; without
       a timely decision the request **counts as approved** — the deemed-approval date is set
       automatically to **request date + 2 weeks**.
-    - **Lines:** the employees covered, each with their estimated overtime hours from the request.
+    - **Lines:** the employees covered, each with their estimated overtime hours from the request and
+      the **previous year's wage excluding overtime** used for the income check (condition 3).
     - Entered and approved by the **Payroll Manager** (`group_l10n_cw_payroll_manager`, the same senior
       gate as AD-16).
     - On the employee only a **derived, read-only indicator** ("covered by Lei di Bion <year>"), never
@@ -731,19 +769,31 @@ flowchart TD
     "(≤ 10 overtime hours/week) AND (a valid, approved employer beschikking)")*:
     1. the employee is on a line of an **approved or deemed-approved** record for that year (a
        requested or rejected record exempts nothing);
-    2. within **10 overtime hours per week** — the manual split below; anything above is taxed
-       normally;
-    3. the employee's gross annual income stays **at or below the income limit** of Arbeidsregeling
-       art. 3. The limit is a statutory amount → **dated data** (AD-5); its value and source are open
-       (**OQ-21**, blocks only Story 2.9's income check). Payroll can only **forecast** this; if the
-       limit turns out to be exceeded, the exemption is corrected with "Correct from [date]" (AD-30).
+    2. within **10 overtime hours per week, 40 per month and 520 per year** — the manual split below;
+       anything above is taxed normally *(40/month and 520/year added 2026-10-09, OQ-21)*;
+    3. the employee's annual wage is **not above the income limit** of Arbeidsregeling art. 3: XCG
+       85,753.20 gross per year, **excluding overtime** and **including vakantiegeld and bonuses**,
+       tested at request on the **previous year's** wage *(decided 2026-10-09, OQ-21, superseding "its
+       value and source are open (OQ-21)" and the forecast-only test of the current year)*:
+       - **Storage:** one fixed dated limit amount in `hr.tax.bracket`, `tax_type` =
+         `lei_di_bion_inkomensgrens`, only compared (annual wage ≤ limit) — no `compute_tax()`, no
+         brackets (AD-5) *(decided 2026-10-09, superseding "read via `compute_tax()`")*. It is **never** read from `hr.svb.parameters`, even though the 2026
+         value equals the ZV/OV annual loongrens: the two come from different authorities.
+       - **Check at line entry:** when an employee line is added to the approval record, the module
+         compares the previous year's wage excluding overtime (from the YTD totals, AD-9) with the limit
+         and **blocks** the line if it is above. If the module has no previous-year data (a new
+         employee, the first year in the module, migrated data), the approver enters the previous
+         year's wage manually and the module checks that amount (PO, 2026-10-09).
+       - **During the year:** the module **warns** when the forecast annual wage exceeds the limit; the
+         correction stays manual with "Correct from [date]" (AD-30). Whether the exemption lapses when
+         the limit is exceeded during the current year, and from when, is open (**OQ-26**).
   - Eligibility is evaluated **point-in-time at `payslip.date_to`** (AD-17): a payslip is exempt only if
     the record covers the employee with an approved or deemed-approved status on that date. A
     revocation or new approval applies to periods by their `date_to`, **not** retroactively within an
     already-computed period. Without a valid approval the overtime is **not** exempt and falls back to a
     taxable route (AD-21): *regulier* → maandtabel or *incidenteel* → bijzondere.
-  - **The 10 hrs/week cap is a manual determination, not engine arithmetic.** Since v1.0R is monthly,
-    the spine fixes **no** week→month conversion (40 vs 43.33 vs ISO weeks): the approver enters the
+  - **The hour caps are a manual determination, not engine arithmetic.** The Belastingdienst states
+    10 hours/week as 40 hours/month and 520 hours/year (added 2026-10-09, OQ-21); the approver enters the
     **eligible-exempt hours** as the exempt component and any remainder as a taxable overtime component.
     The engine applies the split it is **given** and computes no cap (consistent with AD-21's
     no-frequency-threshold rule). When both exempt and *regulier* overtime exist, the cap counts only
@@ -767,9 +817,11 @@ flowchart TD
   is recorded in `.memlog.md`.
 - **Design choice, not a legal requirement.** BVZ is also levied over the zuiver voljaarsloon (art. 6.8
   lid 3), so a monthly maximum would also be defensible. The running total is kept because the year total
-  and the supplement are right immediately. There is **no per-employee choice**; if the SVB or
-  Belastingdienst does not accept a monthly return with a BVZ premium above 150 000 ÷ 12 per month
-  (OQ-18), BVZ moves to a monthly maximum as a single company-level setting — not built until required.
+  and the supplement are right immediately. There is **no per-employee choice**. The Belastingdienst
+  and the SVB accept a monthly return on either the periodic or the cumulated limit; the final annual
+  settlement runs through the verzamelloonstaat and the employee's income-tax assessment *(decided
+  2026-10-09, OQ-18, superseding "if the monthly return above 150 000 ÷ 12 is not accepted, BVZ moves to
+  a monthly maximum as a single company-level setting"; that fallback is dropped)*.
 - **Rule — base-cumulative running total with a pro-rated ceiling:**
   - `pro_rated_ceiling = bvz_grens × (months since the start of insurance/employment in this year, incl.
     this one) ÷ 12` — room starts at the insurance/employment start, not 1 January (Landsbesluit BVZ
@@ -806,11 +858,13 @@ flowchart TD
   *n* requires recomputing every later confirmed period *n+1 …* in ascending order for the BVZ rules; a
   run may not close leaving stale later BVZ periods. AOV/AWW and AVBZ do **not** cascade (each month
   stands alone). YTD is still written only at `action_close()` (AD-9).
-- **BVZ annual recalculation (BVZ-specific option).** A per-employee **Retroactive** switch: when the
-  expected annual wage, the AOV-insured status, or the rate changes, the earlier months of the year are
-  recalculated and the premium and supplement differences are settled as correction lines on the current
-  payslip (AD-30). Encoded as requested alongside AD-30; whether it adds anything beyond AD-30 plus the
-  running total is **open (OQ-19)**.
+- **No BVZ-specific recalculation switch** *(decided 2026-10-09, OQ-19, superseding the per-employee
+  "Retroactive" switch that recalculated the earlier months of the year)*: a change with a past
+  effective date (AOV-insured status, supplement type, rate) is settled over earlier months **only**
+  through "Correct from [date]" (AD-30), including its prompt on save. A locked year is never
+  recalculated. The module flags the 65th birthday from the date of birth and suggests AOV-insured =
+  no from that date; the payroll clerk confirms with one click, and the BVZ rate follows the same
+  date *(decided 2026-10-09, superseding the optional enhancement; open: OQ-25)*.
 - **Low-income reduction not in payroll.** The BVZ low-income reduction (Landsbesluit art. 2 lid 3–4) is
   not applied in payroll. Withholding follows the SVB table. Any reduction is settled through the
   employee's annual assessment (Lv BVZ art. 6.7). The employer supplement is not corrected when the
@@ -842,8 +896,11 @@ flowchart TD
     non-singleton), replacing the `FRINGE_BENEFITS` payslip input — `TOTAL_LOON` (Seq 10) reads them; and
     untaxed earnings (AD-27). **Stay per-period payslip inputs:** the four overtime hour inputs
     (`OVT_WD_HRS`, `OVT_SAT_HRS`, `OVT_SUN_HRS`, `OVT_PH_HRS`), bijzondere beloningen, and `PENSION_EMP`.
-  - Bijtelling is wage in kind: in gross, `TAX_INC` and the premium bases, not in cash net (AD-2,
-    OQ-20).
+  - Bijtelling is wage in kind: in gross, `TAX_INC` and the premium bases, not in cash net; the
+    Seq 127 offset removes it from cash net (AD-2; decided 2026-10-09, OQ-20).
+  - **"Vaste periodieke uitkering" flag** on `EARNING` lines *(decided 2026-10-09, OQ-13/OQ-22, PO)*:
+    the line carries an annual amount whose monthly ÷ 12 reserve feeds the ZV/OV base (AD-14) and the
+    SVB-wage hourly rate (AD-26); the line's actual payout is then excluded from the ZV/OV base.
   - Tier-3 decoupling (AD-8) is unchanged.
 
 ### AD-26 — Calculation settings for calculated amounts `[ADOPTED]` (2026-10-08)
@@ -856,8 +913,12 @@ flowchart TD
   - **Basis:** amounts (Σ of selected **included items** = results of other salary rules, which **must**
     have a lower sequence — AD-3) or **hours**.
   - **Factor:** percentage, hourly rate, or multiplier. Hourly rate = the employee's hourly wage,
-    **standard** (contract wage ÷ 173.33) or **SVB-wage based** (meaning open, OQ-13). Choosing
-    multiplier fixes the multiplier switch to Yes; a multiplier may be stored without being used.
+    **standard** (contract wage ÷ 173.33) or **SVB-wage based** = (base wage + fixed allowances +
+    commissions + the monthly reserves for fixed periodic payments such as vakantiegeld or a 13th
+    month) ÷ 173.33; incidental overtime is never in the SVB wage. The reserves are the annual ÷ 12 of
+    `EARNING` lines flagged "vaste periodieke uitkering" (AD-14) *(decided 2026-10-09, OQ-13,
+    superseding "meaning open, OQ-13")*. Choosing multiplier fixes the multiplier switch to Yes; a
+    multiplier may be stored without being used.
   - **Include base wage** adds the contractual `version.wage` (not this month's `BASIC` result).
     **Base amount** is a fixed amount **added** to the basis.
   - `basis = (version.wage if include_base_wage else 0) + Σ included items + base_amount` (or hours);
@@ -953,8 +1014,9 @@ flowchart TD
 
 ### AD-30 — Corrections as lines on the current payslip `[ADOPTED]` (2026-10-08)
 
-- **Binds:** the "Correct from [date]" function for every premium and loonbelasting, the BVZ annual
-  recalculation (AD-24), and the `CORR_*` correction lines.
+- **Binds:** the "Correct from [date]" function for every premium and loonbelasting (also the only
+  route for BVZ since the BVZ annual-recalculation switch was removed, AD-24; decided 2026-10-09,
+  OQ-19), the prompt on saving a past-dated change, and the `CORR_*` correction lines.
 - **Prevents:** a closed payslip or its posted move being changed (AD-9); a correction disappearing into
   an ordinary line so it cannot be identified.
 - **Rule:**
@@ -963,8 +1025,19 @@ flowchart TD
     withheld/paid) is booked as identifiable **correction lines on the current payslip** — category per
     the corrected rule, `CORR_*` codes (exact codes left to Story 3.8). Closed payslips are never
     changed.
-  - How corrections are reported to the Belastingdienst/SVB for the periods they relate to is **open
-    (OQ-15)**.
+  - **Reporting — TWK method** *(decided 2026-10-09, OQ-15, superseding "how corrections are reported
+    … is open (OQ-15)")*: within the current year the difference goes into the **current month's**
+    return, so the cumulative year amounts reconcile again; a separate corrected return for the old
+    month is normally not needed. Corrections over a closed year run through the **verzamelloonstaat**;
+    where it differs from the monthly returns, a naheffing (ALL art. 16) or a vermindering/restitution
+    (ALL art. 39a lid 2; Lv AOV art. 30) follows.
+  - **Prompt on a past effective date** *(decided 2026-10-09, OQ-19)*: saving a change whose effective
+    date falls in a closed month asks: "Je hebt een wijziging doorgevoerd die ingaat per [datum]. Wil je
+    de tussenliggende periodes nu met terugwerkende kracht corrigeren?" with [Ja, corrigeer vanaf
+    [datum]] and [Nee, pas vanaf de huidige maand toepassen]; Ja starts "Correct from [date]". If the
+    date falls in a **locked year**, the module says the correction over that year cannot be made in
+    the module and runs through the verzamelloonstaat, and offers only to correct from **1 January of
+    the current year**. Payslips and returns of a locked year are never recalculated or overwritten.
   - A backdated pay rise is **not** a correction: back pay is wage in the month it is paid (art. 10 lid
     1 LLB) — an ordinary earning in the current period.
 
@@ -973,10 +1046,10 @@ flowchart TD
 | Concern | Convention |
 | --- | --- |
 | Naming | Custom fields on standard models prefixed `l10n_cw_`; new models `hr.<thing>` (e.g. `hr.tax.bracket`); rule codes UPPER_SNAKE (`AOV_AWW_EMP`); component-set technical codes UPPER_SNAKE and immutable (`STD_OFFICE`). |
-| Statutory data | SVB premium rates + ceilings as a per-year `hr.svb.parameters` record (AD-22); bijzondere beloningen rates and the Belastingdienst scalars (basiskorting, verwervingskosten, toeslagen) as dated `hr.tax.bracket` records (AD-5); loonbelasting as versioned `hr.loonbelasting.tabel` entries (AD-20). All three are selected by `valid_from desc, id desc` among active records valid on `payslip.date_to` — the latest effective version wins, corrections handled by upload order — and are append-only. **Authoritative source:** the official Belastingdienst (loonbelasting, incl. basiskorting) and SVB (premiums, ceilings) annual publications govern; any literal in the v3.0D tech design is indicative only and superseded by them. |
+| Statutory data | SVB premium rates + ceilings as a per-year `hr.svb.parameters` record (AD-22); bijzondere beloningen rates and the Belastingdienst scalars (basiskorting, verwervingskosten, toeslagen, the Lei di Bion income limit — added 2026-10-09, OQ-21) as dated `hr.tax.bracket` records (AD-5); loonbelasting as versioned `hr.loonbelasting.tabel` entries (AD-20). All three are selected by `valid_from desc, id desc` among active records valid on `payslip.date_to` — the latest effective version wins, corrections handled by upload order — and are append-only. **Authoritative source:** the official Belastingdienst (loonbelasting, incl. basiskorting) and SVB (premiums, ceilings) annual publications govern; any literal in the v3.0D tech design is indicative only and superseded by them. |
 | Money & rounding | XCG; round to 2 dp at rule output; deductions negative (AD-1); AOV/AWW and AVBZ monthly maximum = annual ceiling ÷ 12, BVZ running total with a pro-rated ceiling (AD-24, BVZ only), ZV/OV monthly cap direct (AD-4, AD-22; decided 2026-10-08, superseding cumulative annual ceilings for AOV/AWW and AVBZ); no net rounding — net is paid to the cent (AD-29); lb-tabel period-specific (AD-20). |
 | State & mutation | Run/payslip state via Odoo states; YTD, the bijzondere-tarief record, the journal, and the AD-29 close-time state (net carry-over balance, net-deduction balances, lifetime cumulative-cap accumulators, one-time resets, beschikkingsaftrek zeroing, year lock) are mutated only in `action_close()` (AD-9, AD-21, AD-26, AD-28, AD-29), and the controlled reopen reverses each for an unlocked year; a locked year is never reopened in the module — only by restoring the backup taken before its last run and redoing that run (decided 2026-10-08, superseding "the controlled reopen reverses each" for the year-close mutations; OQ-23); rules are pure functions of the payslip context and **never write** — EXTRA_TAX may *read* the per-(employee, year) tarief record and the manager's pre-close basis/override input, and the net-deduction, carry-over and calculated-amount rules may *read* their balance or accumulator (added 2026-10-08), but no rule writes any record. |
-| Audit & access | All custom models inherit `mail.thread`; four security groups enforce least privilege (Employee, Payroll User, Payroll Manager, Accountant), one per user under one privilege; Payroll User/Manager imply Odoo's `hr_payroll` Officer/Administrator groups (and the HR rights those carry), Accountant implies `account.group_account_readonly` and reads all payslips *(decided 2026-10-06, PO)*; the most senior — Payroll Manager — also gates distribution (AD-16) and approves the Lei di Bion beschikking (AD-23); employee record rule restricts payslips to `employee_id.user_id = user` and final states (`validated`, `paid`) *(state filter decided 2026-10-06)*; the Accountant carries its own all-payslips rule so a second role never narrows it; employee/accountant payslip viewing and PDF download are delivered by Stories 3.6/4.1. |
+| Audit & access | All custom models inherit `mail.thread`; four security groups enforce least privilege (Employee, Payroll User, Payroll Manager, Accountant), one per user under one privilege; the groups are laddered — Payroll Manager implies Payroll User, so it has all of its rights *(recorded 2026-10-09 from Tech Design v5.0D; built in Story 1.3)*; Payroll User/Manager imply Odoo's `hr_payroll` Officer/Administrator groups (and the HR rights those carry), Accountant implies `account.group_account_readonly` and reads all payslips *(decided 2026-10-06, PO)*; the most senior — Payroll Manager — also gates distribution (AD-16) and approves the Lei di Bion beschikking (AD-23); employee record rule restricts payslips to `employee_id.user_id = user` and final states (`validated`, `paid`) *(state filter decided 2026-10-06)*; the Accountant carries its own all-payslips rule so a second role never narrows it; employee/accountant payslip viewing and PDF download are delivered by Stories 3.6/4.1. |
 | Disable semantics | `active` = visibility+calc; `enabled` = calc-only (AD-7); never gate the never-gate set (AD-6). |
 | Effective date & missing data | All dated lookups use the payslip period-end date (AD-17); a missing required rate hard-errors, never 0 (AD-18). |
 | Schema migration | Schema changes (e.g. the AD-22 `hr.svb.parameters` model and the AD-5 `tax_type` changes) ship Odoo migration scripts that preserve historical payslips and closed YTD; never destructively drop or rewrite historical statutory records (append-only, AD-5, AD-22). |
@@ -1054,14 +1127,15 @@ l10n_cw_hr_payroll/
 | --- | --- | --- |
 | Statutory calculation engine (Sequence 10–150) | Localization — salary-rule Python | AD-1, AD-2, AD-3, AD-4, AD-6, AD-12, AD-14 |
 | Bijzondere beloningen withholding (EXTRA_TAX) + annual frozen tarief | Localization — EXTRA_TAX rule; Application — `hr.employee.bijzonder.tarief` | AD-5, AD-9, AD-21 |
-| Overtime treatment (regulier / incidenteel / Lei di Bion-exempt) | Localization — overtime rules; Application — annual employer-level Lei di Bion approval record with employee lines, derived employee indicator (decided 2026-10-08, superseding "beschikking approval") | AD-21, AD-23, AD-16, AD-17, AD-30 |
-| SVB premiums — monthly maximum for AOV/AWW, AVBZ, ZV, OV; BVZ running total with pro-rated ceiling, supplement in `NET` (decided 2026-10-08) | Localization — premium rules; BVZ reads period-bounded confirmed lines; ZV/OV base = contract wage + Bijtelling + flagged earnings, never overtime (decided 2026-10-08) | AD-2, AD-4, AD-14, AD-22, AD-24, AD-9 |
+| Overtime treatment (regulier / incidenteel / Lei di Bion-exempt) | Localization — overtime rules; Application — annual employer-level Lei di Bion approval record with employee lines, derived employee indicator (decided 2026-10-08, superseding "beschikking approval"); income-limit check at line entry against the prior-year wage and the dated `lei_di_bion_inkomensgrens` in `hr.tax.bracket` (decided 2026-10-09, OQ-21) | AD-21, AD-23, AD-16, AD-17, AD-30 |
+| SVB premiums — monthly maximum for AOV/AWW, AVBZ, ZV, OV; BVZ running total with pro-rated ceiling, supplement in `NET` (decided 2026-10-08) | Localization — premium rules; BVZ reads period-bounded confirmed lines; ZV/OV base = contract wage + Bijtelling + flagged earnings, never overtime (decided 2026-10-08), plus the pro-rata reserve of fixed periodic payments, one SVB-loon for ZV and OV, ZV only for insured employees (decided 2026-10-09, OQ-22) | AD-2, AD-4, AD-14, AD-22, AD-24, AD-9 |
 | Employee-level dated wage lines (Bijtelling, earnings, beschikkingsaftrek) | Application — `hr.employee.wage.line` | AD-25, AD-8 |
 | Calculation settings + lifetime cap accumulator | Localization — calculated-amount rules; Application — accumulator | AD-26, AD-9, AD-3 |
 | Untaxed earnings (art. 6F lid 1 LLB, incl. `BVZ_SUPPL` under sub l; decided 2026-10-09, superseding its provisional status) | Localization — `UNTAXED_EARN`, `BVZ_SUPPL`, base and `TAX_INC` rules | AD-27, AD-14, AD-2 |
 | Net deductions (loans, loonbeslag, dues) + creditor payables | Localization — `NET_PRE`/`NET_DED`; Application — balances; `account.move` | AD-28, AD-10, AD-9 |
+| Bijtelling offset (wage in kind out of cash net) | Localization — offset rule at Seq 127 (negative `DED`, never-gated); `account.move` credits the in-kind counter-account (decided 2026-10-09, OQ-20) | AD-2, AD-6, AD-10, AD-25 |
 | Net carry-over + year closing | Localization — `NET_CARRY`; Application — `action_close()`; locked year redone only via Odoo.sh backup restore, never in-module (decided 2026-10-08) | AD-29, AD-9, AD-10 |
-| Corrections ("Correct from [date]", BVZ annual recalculation) | Localization — `CORR_*` lines on the current payslip | AD-30, AD-24, AD-9 |
+| Corrections ("Correct from [date]", TWK reporting, prompt on a past-dated change; the BVZ annual-recalculation switch is removed, decided 2026-10-09, OQ-19) | Localization — `CORR_*` lines on the current payslip; Application — the past-date prompt | AD-30, AD-24, AD-9 |
 | SVB premium rate management / regulatory agility | Localization — `hr.svb.parameters` (per-year) | AD-5, AD-22 |
 | Loonbelasting table lookup + annual upload | Localization — `hr.loonbelasting.tabel` | AD-20 |
 | Three-tier wage component model | Application — sets, wage lines, wizard | AD-7, AD-8 |
@@ -1084,19 +1158,24 @@ l10n_cw_hr_payroll/
 | OQ-05 Final GL account numbers | Per-company mapping at onboarding (v1.1R); AD-10 holds regardless of the numbers. |
 | OQ-07 SVB gevarenklasse model | Interim `l10n_cw_ov_percentage` Float on contract; future Many2one `l10n_cw.svb.industry` (localization layer) once the official list is sourced. |
 | OQ-08 Loan / garnishment scope | **Resolved 2026-10-08** by AD-28 (net deductions in v1.0R); no longer deferred. |
-| OQ-13 Hourly wage "SVB-wage based" variant (AD-26) | Open: exact meaning to be confirmed by the PO; the standard variant (contract wage ÷ 173.33) is fixed. |
+| OQ-13 Hourly wage "SVB-wage based" variant (AD-26) | **Resolved 2026-10-09:** (base wage + fixed allowances + commissions + monthly reserves for fixed periodic payments) ÷ 173.33; incidental overtime excluded; reserves from the "vaste periodieke uitkering" flag (AD-14, AD-25, AD-26). |
 | OQ-14 Tax treatment of the BVZ supplement (AD-2, AD-24) | **Resolved 2026-10-09** (decided 2026-10-09, superseding the open contradiction and the provisional `is_untaxed` with a separate `BVZ_SUPPL_EXTRA` line, Seq 31): the BVZ supplement is **not wage** (art. 6F lid 1 sub l LLB) — untaxed and outside every premium base (AOV/AWW, BVZ, AVBZ, ZV/OV), also under type `full`. `BVZ_SUPPL` holds the whole supplement; the separate line is removed (no sequence row, GL debit or payslip line). Employer cost = `BVZ_SUPPL`, counted in `TOTAL_ER_COST`. No longer deferred. |
-| OQ-15 Reporting of corrections to the Belastingdienst / SVB (AD-30) | Open: procedure for reporting corrections for the periods they relate to. Booking on the current payslip is fixed. Legal framework (added 2026-10-09): monthly return per calendar month (ALL art. 8 lid 3), naheffing when too little was withheld (ALL art. 16), ambtshalve vermindering when too much was withheld (ALL art. 39a lid 2), restitution/collection of premiums (Lv AOV art. 30). The practical reporting method is still to be agreed with the Belastingdienst and the SVB. |
+| OQ-15 Reporting of corrections to the Belastingdienst / SVB (AD-30) | **Resolved 2026-10-09:** TWK method — the difference goes into the current month's return; a closed year is corrected through the verzamelloonstaat, followed by naheffing (ALL art. 16) or vermindering/restitution (ALL art. 39a lid 2; Lv AOV art. 30) (AD-30). |
 | OQ-16 Premium room for a bonus taxed via the bijzondere table (AD-21, AD-4) | **Resolved 2026-10-09** (decided 2026-10-09, superseding "open: whether such a bonus gets its own premium room"): **no** own AOV/AWW premium room. The maximum applies per pay period (Gezamenlijke beschikking AOV/AWW en loonbelasting 1976, art. 6 lid 2) and the bonus belongs to the wage of the month it is paid in (LLB art. 8 lid 6). No longer deferred. |
 | OQ-17 Who pays the AOV 1 % above the ceiling (AD-4, AD-22) | **Resolved 2026-10-09** (decided 2026-10-09, superseding "open: AOV art. 27 lid 2 is not explicit that it is an employee premium"): the 1 % above the AOV/AWW monthly maximum is the **employee's own premium** (Lv AOV art. 26 lid 3); the employer's toeslag (Lv AOV art. 58) does not cover it and the employer pays no surcharge. No longer deferred. |
-| OQ-18 SVB acceptance of a BVZ premium above 150 000 ÷ 12 per month (AD-24) | Open: if not accepted, BVZ moves to a monthly maximum as a single company-level setting — not built until required. Legal reference (added 2026-10-09): BVZ is levied over the zuiver voljaarsloon (Lv BVZ art. 22 lid 3); SVB acceptance of the monthly return is still to be confirmed. |
-| OQ-19 BVZ annual recalculation vs generic correction (AD-24, AD-30) | Open: does the BVZ "Retroactive" option add anything beyond AD-30 plus the running total? Optional enhancement (not an acceptance criterion): suggest AOV-insured = no from the date of birth (age 65), with manual confirmation. |
-| OQ-20 Bijtelling in-kind presentation in net (AD-2, AD-25) | Open: how the non-cash offset is presented (offset line vs separate category); the requirement that in-kind wage does not raise cash net is fixed. |
-| OQ-21 Lei di Bion income limit (Arbeidsregeling art. 3) (AD-23, AD-5) | Open (added 2026-10-08): the amount and where it is published. Stored as dated data once sourced. Blocks only Story 2.9's income-limit check; the approval record and the other two conditions are fixed. |
-| OQ-22 OV ordinance wage definition = ZV definition? (AD-14) | Open, non-blocking (added 2026-10-08): only the ZV ordinance was checked; OV uses the ZV base until confirmed. Blocks only a later change to the OV base. Reference (added 2026-10-09): the OV and ZV ordinances are not in the Fiscale Wetgeving 2026 bundle; to be asked of the SVB. |
+| OQ-18 SVB acceptance of a BVZ premium above 150 000 ÷ 12 per month (AD-24) | **Resolved 2026-10-09:** accepted — the monthly return may use the periodic or the cumulated limit; the BVZ running total stands and the company-level monthly-maximum fallback is dropped (AD-24). |
+| OQ-19 BVZ annual recalculation vs generic correction (AD-24, AD-30) | **Resolved 2026-10-09:** the per-employee switch is removed; corrections run only through "Correct from [date]" with a prompt on a past-dated change; a locked year is never recalculated. The age-65 suggestion moved to AD-24 (an acceptance criterion since 2026-10-09; OQ-25 open). |
+| OQ-20 Bijtelling in-kind presentation in net (AD-2, AD-25) | **Resolved 2026-10-09:** Bijtelling stays in `TOTAL_LOON` as its own payslip line; offset rule at Seq 127 (negative `DED`, never-gated, code fixed by Story 2.11) credits an in-kind counter-account (AD-2, AD-6, AD-10). |
+| OQ-21 Lei di Bion income limit (Arbeidsregeling art. 3) (AD-23, AD-5) | **Resolved 2026-10-09:** XCG 85,753.20 gross per year, excluding overtime, including vakantiegeld and bonuses, tested on the prior-year wage; dated `hr.tax.bracket` `tax_type` `lei_di_bion_inkomensgrens`; checked at line entry (manual prior-year wage when the module has no data), in-year warning. Sources: belastingdienst.cw Lei di Bion page and `docs/Toelichting-overwerkregistratie-2026.pdf` (AD-23). |
+| OQ-22 OV ordinance wage definition = ZV definition? (AD-14) | **Resolved 2026-10-09:** ZV and OV use the same SVB-loon (incl. the pro-rata reserve of fixed periodic payments, never overtime); ZV insures only 5/6-day workers below the loongrens on 1 November of the previous year, OV everyone (AD-14). |
 | OQ-23 Licence mechanism and provider permission for a restore after a new licence (AD-9, AD-29) | Open (added 2026-10-08): what the licence is, how it is entered, and how the provider's permission is given and recorded. Blocks only Story 3.7's restore guidance; no licence model is specified until answered. |
+| OQ-24 Wage tested on the ZV peildatum (AD-14) | Open, non-blocking (added 2026-10-09): the wage level converted to a full year, or the wage earned so far; and the rule for employees hired after 1 November. Affects only the automatic ZV gate of Story 2.10. |
+| OQ-25 AOV/AWW stop at 65 (AD-24) | Open, non-blocking (added 2026-10-09): on the birthday itself (pro rata) or from the next month; the BVZ rate follows. Affects only the effective date the age-65 suggestion proposes (Story 2.3). |
+| OQ-26 Lei di Bion limit exceeded during the year (AD-23) | Open, non-blocking (added 2026-10-09): does the exemption lapse, and from when; to be confirmed by the Belastingdienst. Until answered the module warns and the correction stays manual (Story 2.9). |
 | Pay periods beyond monthly; ZV sick pay; verzamelloonstaat & jaaropgaaf CSV; e-filing; DGA; Aruba/SXM | Out of scope for v1.0R per PRD roadmap (v1.1R+). Same paradigm; period-specific divisors/tables. *(Loans and loonbeslag removed from this row 2026-10-08: now in v1.0R as net deductions, AD-28.)* |
 | Bank payments / bank interface (net-deduction creditor payments via `res.partner.bank`) | v1.1R (decided 2026-10-08). AD-28 already books the creditor payable; payment routing adds no calculation. |
+| Multi-year beschikking tracking | v1.2R (recorded 2026-10-09 from Tech Design v5.0D). Until then a beschikkingsaftrek line is entered per year and zeroed at year closing (AD-27, AD-29); no calculation change. |
+| Reports after v1.0R: B-03 jaaropgaaf, B-04 verzamelloonstaat CSV, B-06/B-07 labour-cost reports (YTD per employee / per department), B-08 ZV sick-pay overview (v1.1R); B-09 batch payment export (release to be decided, OQ-10) | Read-only Reports layer (AD-11) over `hr.wage.component.ytd` and payslip lines; they compute nothing. Full inventory (A-01..A-06, B-01..B-09) in the PRD Reports section and the epics, Epic 4 (recorded 2026-10-09). |
 | Loonbelastingkaart category per untaxed-earning line | v1.1R (decided 2026-10-08). Reporting attribute; AD-27's legal-ground field already records the basis. |
 | Statutory vacation accrual & balance (Vakantieregeling 1949) | Leave management built on native `hr_holidays`; entitlement is seed/dated data; same salary-rule paradigm; termination payout reuses the deferred final-settlement flow. Full design in `docs/design/cw-vacation-accrual-v1.1R.md`. *(decided 2026-10-08, superseding the 1 January cron grant; still v1.1R: per-period accrual via a native Time Off accrual plan, credited at period end and pro-rata for partial months — a 1 January grant only where a contract promises the full year upfront; seniority extra days as accrual-plan levels (company policy or CAO, not law) on top of the statutory minimum; days taken only through `hr.leave`, payroll reads them; carry-over cap per company policy within art. 6F lid 1 sub f.)* |
 | Operational envelope (CI/CD, branch testing, upgrades) | Owned by the Odoo.sh platform, not module code; no module-level decision needed. |
