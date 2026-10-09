@@ -54,7 +54,7 @@ These are binding. Most calculation bugs come from violating one of them; the `.
 
 **Resolved — overtime in the premium base (AD-14).** The v3.0D source was internally contradictory (`BVZ_PREM_INC` excluded overtime; `AOV_PREM_INC` included it). The product owner confirmed (2026-06-26) that overtime **is** included. All premium bases derive from `categories.BASIC + categories.ALW`, and `BVZ_PREM_INC` must be refactored off `rules.TOTAL_LOON.amount` to that base. No longer a blocking question.
 
-No blocking questions remain for v1.0R. The other open questions (OQ-01..OQ-20; OQ-13..OQ-20 added 2026-10-08) are non-blocking — see the PRD; deferred items are tracked in the architecture spine's Deferred section.
+No blocking questions remain for v1.0R. The other open questions (OQ-01..OQ-23; OQ-13..OQ-23 added 2026-10-08) are non-blocking — see the PRD; deferred items are tracked in the architecture spine's Deferred section.
 
 ## Conventions when code is added
 
